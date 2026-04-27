@@ -2,36 +2,61 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class DexcomService {
-  // Adresy serwerów Dexcom (OUS = Outside US, czyli np. Polska)
-  static const String serverOUS = "shareous1.dexcom.com";
-  static const String serverUS = "share1.dexcom.com";
-
+  static const String _baseUrl = "shareous1.dexcom.com";
+  
+  // To ID zadziałało w Twoich testach - zostawiamy je jako stałą
+  static const String _appId = "d89443d2-327c-4a6f-89e5-496bbb0317db";
+  
   String? _sessionId;
 
-  // Funkcja logowania
-  Future<bool> login(String username, String password) async {
-    final url = Uri.https(serverOUS, "/ShareWebServices/Services/General/LoginPublisherAccountByName");
-    
+  /// Logowanie dwuetapowe (Authenticate -> Login)
+  Future<String> login(String username, String password) async {
     try {
-      final response = await http.post(
-        url,
-        headers: {"Content-Type": "application/json"},
+      // KROK 1: Pobranie Account ID
+      final authResponse = await http.post(
+        Uri.https(_baseUrl, "/ShareWebServices/Services/General/AuthenticatePublisherAccount"),
+        headers: {"Content-Type": "application/json", "Accept": "application/json"},
         body: jsonEncode({
-          "accountName": username,
+          "accountName": username.trim(),
           "password": password,
-          "applicationId": "d89443d2-327c-4a6f-89e5-ada9f8730b61", // Stałe ID Dexcom
+          "applicationId": _appId,
         }),
       );
 
-      if (response.statusCode == 200) {
-        // ID sesji przychodzi w cudzysłowie, np. "uuid-string"
-        _sessionId = response.body.replaceAll('"', '');
-        print("Zalogowano! ID Sesji: $_sessionId");
-        return true;
+      if (authResponse.statusCode != 200) {
+        return "Błąd serwera (Krok 1): ${authResponse.statusCode}";
       }
+
+      final accountId = authResponse.body.replaceAll('"', '');
+      if (accountId == "00000000-0000-0000-0000-000000000000") {
+        return "Niepoprawny login lub hasło.";
+      }
+
+      // KROK 2: Pobranie Session ID
+      final loginResponse = await http.post(
+        Uri.https(_baseUrl, "/ShareWebServices/Services/General/LoginPublisherAccountById"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "accountId": accountId,
+          "password": password,
+          "applicationId": _appId,
+        }),
+      );
+
+      if (loginResponse.statusCode == 200) {
+        final token = loginResponse.body.replaceAll('"', '');
+        if (token != "00000000-0000-0000-0000-000000000000") {
+          _sessionId = token;
+          return "SUCCESS";
+        }
+      }
+      
+      return "Błąd podczas generowania sesji.";
     } catch (e) {
-      print("Błąd logowania: $e");
+      return "Błąd połączenia: $e";
     }
-    return false;
   }
+
+  String? get sessionId => _sessionId;
+  bool get isLoggedIn => _sessionId != null;
 }
