@@ -5,6 +5,9 @@ class AlertsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(child: Text('Alerty', style: TextStyle(fontSize: 24)));
+    return Scaffold(
+      appBar: AppBar(title: const Text("Powiadomienia i Alerty")),
+      body: const Center(child: Text("Ustawienia progów hypo/hiper")),
+    );
   }
 }

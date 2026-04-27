@@ -5,6 +5,14 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(child: Text('Ekran Startowy', style: TextStyle(fontSize: 24)));
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Monitor CGM"),
+        centerTitle: true,
+      ),
+      body: const Center(
+        child: Text("Tu będzie Twój aktualny cukier", style: TextStyle(fontSize: 18)),
+      ),
+    );
   }
 }

@@ -5,6 +5,9 @@ class ChartsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(child: Text('Wykresy', style: TextStyle(fontSize: 24)));
+    return Scaffold(
+      appBar: AppBar(title: const Text("Analiza Glikemii")),
+      body: const Center(child: Text("Tu pojawi się wykres 24h")),
+    );
   }
 }
