@@ -28,7 +28,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: StreamBuilder<List<GlucoseReading>>(
         stream: _dataService.glucoseStream,
-        initialData: _dataService.lastReadings, // Wykorzystanie pamięci podręcznej RAM
+        initialData: _dataService.lastReadings,
         builder: (context, snapshot) {
           final readings = snapshot.data;
 
@@ -41,7 +41,6 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
 
-          // Najnowszy odczyt znajduje się na początku posortowanej listy
           final latestReading = readings.first;
 
           return RefreshIndicator(

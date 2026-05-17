@@ -9,14 +9,11 @@ class GlucoseDataService {
   final _dexService = DexcomService();
   Timer? _refreshTimer;
   
-  // Pamięć podręczna RAM dla pobranej historii dobowej
   List<GlucoseReading> _lastReadings = [];
 
-  // NAPRAWA BŁĘDU: Zmiana strumienia na przesyłanie List<GlucoseReading>
   final _glucoseStreamController = StreamController<List<GlucoseReading>>.broadcast();
   Stream<List<GlucoseReading>> get glucoseStream => _glucoseStreamController.stream;
 
-  // NAPRAWA BŁĘDU: Dodano getter lastReadings wymagany przez widżety przy starcie
   List<GlucoseReading> get lastReadings => _lastReadings;
 
   void startUpdates() {
@@ -29,6 +26,13 @@ class GlucoseDataService {
     final readings = await _dexService.getGlucoseHistory();
     _lastReadings = readings;
     _glucoseStreamController.add(readings);
+
+    if (readings.isNotEmpty) {
+    print("--- DIAGNOSTYKA CZASU ---");
+    print("Czas telefonu (Local): ${DateTime.now()}");
+    print("Najnowszy odczyt z API: ${readings.first.time}");
+    print("Różnica w minutach: ${DateTime.now().difference(readings.first.time).inMinutes} min");
+  }
   }
 
   void emitCurrentReading() {

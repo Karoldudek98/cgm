@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-// --- BEZPIECZNY MODEL DANYCH ---
+// --- MODEL DANYCH Z PODWÓJNYM PARSEREM CZASU ---
 class GlucoseReading {
   final int value;
   final String direction;
@@ -12,15 +12,21 @@ class GlucoseReading {
 
   factory GlucoseReading.fromJson(Map<String, dynamic> json) {
     final rawDate = json['ST']?.toString() ?? "";
-    int timestamp = DateTime.now().millisecondsSinceEpoch;
-    if (rawDate.isNotEmpty) {
+    DateTime parsedTime = DateTime.now();
+    
+    if (rawDate.contains("Date(")) {
       final numbersOnly = rawDate.replaceAll(RegExp(r'[^0-9]'), '');
       if (numbersOnly.isNotEmpty) {
-        timestamp = int.parse(numbersOnly);
+        parsedTime = DateTime.fromMillisecondsSinceEpoch(int.parse(numbersOnly));
+      }
+    } else if (rawDate.isNotEmpty) {
+      try {
+        parsedTime = DateTime.parse(rawDate);
+      } catch (e) {
+        print("Błąd parsowania daty ISO: $rawDate");
       }
     }
     
-    // Bezpieczna konwersja trendu (obsługuje int oraz String z API Dexcom)
     String trendStr = "Flat";
     if (json['Trend'] != null) {
       if (json['Trend'] is int) {
@@ -43,7 +49,7 @@ class GlucoseReading {
     return GlucoseReading(
       value: json['Value'] ?? 0,
       direction: trendStr,
-      time: DateTime.fromMillisecondsSinceEpoch(timestamp),
+      time: parsedTime,
     );
   }
 
@@ -51,7 +57,7 @@ class GlucoseReading {
     return {
       'Value': value,
       'Trend': direction,
-      'ST': "/Date(${time.millisecondsSinceEpoch})/",
+      'ST': time.toIso8601String(), // Bezpieczny format zapisu lokalnego
     };
   }
 }
@@ -69,7 +75,7 @@ class DexcomService {
   Map<String, int>? _cachedThresholds;
 
   Future<bool> initAndLogin() async {
-    await getThresholds(); // Wczytanie progów do RAMu przy starcie
+    await getThresholds();
     String? user = await _storage.read(key: "dex_user");
     String? pass = await _storage.read(key: "dex_pass");
     if (user != null && pass != null) {
@@ -121,14 +127,18 @@ class DexcomService {
     }
   }
 
-  // POBIERANIE HISTORII (Z OBSŁUGĄ TRYBU OFFLINE)
-  Future<List<GlucoseReading>> getGlucoseHistory({int minutes = 1440, int maxCount = 288}) async {
-    if (_sessionId == null) return await _loadOfflineHistory();
+  // --- NOWA LOGIKA: PRZECHOWYWANIE DO 1 MIESIĄCA (8640 REKORDÓW) ---
+  Future<List<GlucoseReading>> getGlucoseHistory() async {
+    // 1. Wczytaj istniejącą historię z zaszyfrowanej pamięci podręcznej
+    List<GlucoseReading> localHistory = await _loadOfflineHistory();
 
+    if (_sessionId == null) return localHistory;
+
+    // Pobieramy ostatnie 24h z chmury, aby zabezpieczyć aplikację przed luki w danych (np. gdy była zamknięta)
     final url = Uri.https(_baseUrl, "/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues", {
       "sessionId": _sessionId!,
-      "minutes": minutes.toString(),
-      "maxCount": maxCount.toString(),
+      "minutes": "1440",
+      "maxCount": "288",
     });
 
     try {
@@ -136,29 +146,48 @@ class DexcomService {
       
       if (response.body.contains("SessionNotValid")) {
         bool refreshed = await initAndLogin();
-        if (refreshed) {
-          return getGlucoseHistory(minutes: minutes, maxCount: maxCount);
-        }
-        return await _loadOfflineHistory();
+        if (refreshed) return getGlucoseHistory();
+        return localHistory;
       }
 
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is List) {
-          List<GlucoseReading> readings = decoded.map<GlucoseReading>((item) => GlucoseReading.fromJson(item)).toList();
-          readings.sort((a, b) => b.time.compareTo(a.time));
+          List<GlucoseReading> apiReadings = decoded.map<GlucoseReading>((item) => GlucoseReading.fromJson(item)).toList();
 
-          String serializedJson = jsonEncode(readings.map((r) => r.toJson()).toList());
+          // 2. ŁĄCZENIE I DEDUPLIKACJA za pomocą słownika Map (kluczem jest milisekundowy timestamp)
+          final Map<int, GlucoseReading> mergedMap = {};
+          
+          for (var r in localHistory) {
+            mergedMap[r.time.millisecondsSinceEpoch] = r;
+          }
+          for (var r in apiReadings) {
+            mergedMap[r.time.millisecondsSinceEpoch] = r;
+          }
+
+          List<GlucoseReading> mergedList = mergedMap.values.toList();
+          
+          // 3. SORTOWANIE (od najnowszego do najstarszego)
+          mergedList.sort((a, b) => b.time.compareTo(a.time));
+
+          // 4. OGRANICZENIE RETENCJI: 30 dni * 288 odczytów = 8640 maks.
+          const int maxRecords = 8640;
+          if (mergedList.length > maxRecords) {
+            mergedList = mergedList.sublist(0, maxRecords);
+          }
+
+          // 5. ZAPIS DO PLIKU
+          String serializedJson = jsonEncode(mergedList.map((r) => r.toJson()).toList());
           await _storage.write(key: "cached_glucose_history", value: serializedJson);
 
-          return readings;
+          return mergedList;
         }
       }
     } catch (e) {
-      print("Błąd sieci, próba odczytu cache: $e");
+      print("Błąd pobierania danych sieciowych: $e");
     }
 
-    return await _loadOfflineHistory();
+    return localHistory;
   }
 
   Future<List<GlucoseReading>> _loadOfflineHistory() async {
@@ -171,12 +200,12 @@ class DexcomService {
         return readings;
       }
     } catch (e) {
-      print("Błąd odczytu offline: $e");
+      print("Błąd odczytu dysku offline: $e");
     }
     return [];
   }
 
-  // OBSŁUGA PROGÓW ZAPISANYCH W CACHE RAM / ZASZYFROWANYM DYSKU
+  // --- PROGI ALARMOWE ---
   Future<Map<String, int>> getThresholds() async {
     if (_cachedThresholds != null) return _cachedThresholds!;
     String? vLow = await _storage.read(key: "thresh_very_low");
@@ -207,7 +236,6 @@ class DexcomService {
     };
   }
 
-  // NAPRAWA BŁĘDU: Dodano brakujący getter synchroniczny dla wykresów i widżetów
   Map<String, int> get currentThresholds => _cachedThresholds ?? {
     "very_low": 60,
     "low": 70,
