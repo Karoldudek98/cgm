@@ -104,7 +104,10 @@ class DexcomService {
           return GlucoseReading.fromJson(data.first);
         }
       } else if (response.statusCode == 500 || response.body.contains("SessionNotValid")) {
-        await initAndLogin();
+        bool refreshed = await initAndLogin();
+        if (refreshed) {
+          return getLatestReading();
+        }
       }
     } catch (e) {
       print("Błąd pobierania: $e");

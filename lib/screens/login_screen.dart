@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/dexcom_service.dart';
 import 'main_navigation.dart';
-import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
