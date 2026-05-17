@@ -26,30 +26,37 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text("Monitor CGM"),
         centerTitle: true,
       ),
-      body: StreamBuilder<GlucoseReading?>(
+      body: StreamBuilder<List<GlucoseReading>>(
         stream: _dataService.glucoseStream,
+        initialData: _dataService.lastReadings, // Wykorzystanie pamięci podręcznej RAM
         builder: (context, snapshot) {
-          // Stan ładowania tylko przy pierwszym pobraniu
-          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          final readings = snapshot.data;
 
-          final reading = snapshot.data;
-
-          if (reading == null) {
+          if (readings == null || readings.isEmpty) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
             return const Center(
               child: Text("Brak danych. Sprawdź połączenie z Dexcom."),
             );
           }
 
+          // Najnowszy odczyt znajduje się na początku posortowanej listy
+          final latestReading = readings.first;
+
           return RefreshIndicator(
-            onRefresh: () async => _dataService.startUpdates(),
+            onRefresh: () async {
+              _dataService.startUpdates();
+              await Future.delayed(const Duration(milliseconds: 500));
+            },
             child: ListView(
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
                 SizedBox(
                   height: MediaQuery.of(context).size.height * 0.7,
-                  child: GlucoseDisplay(reading: reading),
+                  child: Center(
+                    child: GlucoseDisplay(reading: latestReading),
+                  ),
                 ),
               ],
             ),

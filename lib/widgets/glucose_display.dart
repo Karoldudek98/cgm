@@ -19,15 +19,20 @@ class GlucoseDisplay extends StatelessWidget {
     }
   }
 
-  Color _getGlucoseColor(int value) {
-    if (value < 70) return Colors.red;
-    if (value > 180) return Colors.orange;
-    return Colors.green;
-  }
-
   @override
   Widget build(BuildContext context) {
     final timeAgo = DateTime.now().difference(reading.time).inMinutes;
+
+    final thresholds = DexcomService().currentThresholds;
+    final int lowLimit = thresholds["low"]!;
+    final int highLimit = thresholds["high"]!;
+
+    Color glucoseColor = Colors.green;
+    if (reading.value < lowLimit) {
+      glucoseColor = Colors.red;
+    } else if (reading.value > highLimit) {
+      glucoseColor = Colors.orange;
+    }
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -37,7 +42,7 @@ class GlucoseDisplay extends StatelessWidget {
           style: TextStyle(
             fontSize: 100,
             fontWeight: FontWeight.bold,
-            color: _getGlucoseColor(reading.value),
+            color: glucoseColor,
           ),
         ),
         Row(
@@ -48,6 +53,7 @@ class GlucoseDisplay extends StatelessWidget {
             Text(
               "$timeAgo min temu",
               style: const TextStyle(fontSize: 18, color: Colors.grey),
+                // ignore: l10n_with_parameters
             ),
           ],
         ),
