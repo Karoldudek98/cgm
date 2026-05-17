@@ -9,14 +9,12 @@ class GlucoseDataService {
   final _dexService = DexcomService();
   Timer? _refreshTimer;
 
-  // Stream rozsyłający dane do całej aplikacji
   final _glucoseStreamController = StreamController<GlucoseReading?>.broadcast();
   Stream<GlucoseReading?> get glucoseStream => _glucoseStreamController.stream;
 
   void startUpdates() {
     _refreshTimer?.cancel();
-    _fetchNow(); // Pobierz natychmiast
-    // Ustaw timer na co 1 minutę
+    _fetchNow();
     _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) => _fetchNow());
   }
 

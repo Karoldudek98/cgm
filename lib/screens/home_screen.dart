@@ -16,7 +16,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _dataService.startUpdates(); // Rozpocznij pobieranie przy starcie
+    _dataService.startUpdates();
   }
 
   @override

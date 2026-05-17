@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-// --- MODEL DANYCH ---
 class GlucoseReading {
   final int value;
   final String direction;
@@ -11,7 +10,6 @@ class GlucoseReading {
   GlucoseReading({required this.value, required this.direction, required this.time});
 
   factory GlucoseReading.fromJson(Map<String, dynamic> json) {
-    // ST to czas systemowy w formacie "/Date(1234567890)/"
     String rawDate = json['ST'];
     int timestamp = int.parse(rawDate.replaceAll(RegExp(r'[^0-9]'), ''));
     
@@ -106,7 +104,6 @@ class DexcomService {
           return GlucoseReading.fromJson(data.first);
         }
       } else if (response.statusCode == 500 || response.body.contains("SessionNotValid")) {
-        // Próba odświeżenia sesji przy błędzie
         await initAndLogin();
       }
     } catch (e) {
