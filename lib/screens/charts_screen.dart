@@ -55,17 +55,12 @@ class _ChartsScreenState extends State<ChartsScreen> {
       case Timeframe.twentyFourHours:
         return 48; // Podpis co 4 godziny (48 punktów * 5 min)
       case Timeframe.oneMonth:
-        return 288; // Podpis co 1 dzień (288 punktów * 5 min)
+        return 72; // POPRAWKA: Podpis co 6 godzin (6h * 12 odczytów/h = 72)
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Pobranie progów synchronicznie z pamięci RAM instancji Singletona
-    final thresholds = DexcomService().currentThresholds;
-    final double lowLimit = thresholds["low"]!.toDouble();
-    final double highLimit = thresholds["high"]!.toDouble();
-
     return Scaffold(
       appBar: AppBar(
         title: const Text("Analiza Glikemii"),
@@ -83,6 +78,12 @@ class _ChartsScreenState extends State<ChartsScreen> {
             }
             return const Center(child: Text("Brak dostępnych danych do wykresu."));
           }
+
+          // POPRAWKA: Pobranie progów INSIDE StreamBuilder builder
+          // Dzięki temu po kliknięciu zapisu progów wykres natychmiast przerysuje nowe linie zakresów!
+          final thresholds = DexcomService().currentThresholds;
+          final double lowLimit = thresholds["low"]!.toDouble();
+          final double highLimit = thresholds["high"]!.toDouble();
 
           // Filtrujemy i odwracamy chronologicznie (od najstarszego z lewej do najnowszego z prawej)
           final filteredReadings = _filterReadings(allReadings);
@@ -125,6 +126,32 @@ class _ChartsScreenState extends State<ChartsScreen> {
                   strokeWidth: 1,
                 ),
               ),
+              // POPRAWKA: Konfiguracja małego okienka podpowiedzi (Tooltip) z wartością i czasem odczytu pod spodem
+              lineTouchData: LineTouchData(
+                touchTooltipData: LineTouchTooltipData(
+                  getTooltipColor: (LineBarSpot touchedSpot) => Colors.blueGrey.withOpacity(0.95),
+                  getTooltipItems: (List<LineBarSpot> touchedSpots) {
+                    return touchedSpots.map((LineBarSpot touchedSpot) {
+                      int idx = touchedSpot.x.toInt();
+                      if (idx >= 0 && idx < chronologicalReadings.length) {
+                        final reading = chronologicalReadings[idx];
+                        final timeStr = "${reading.time.hour.toString().padLeft(2, '0')}:${reading.time.minute.toString().padLeft(2, '0')}";
+                        final dateStr = "${reading.time.day.toString().padLeft(2, '0')}.${reading.time.month.toString().padLeft(2, '0')}";
+                        
+                        return LineTooltipItem(
+                          "${reading.value} mg/dL\n$dateStr $timeStr",
+                          const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        );
+                      }
+                      return null;
+                    }).toList();
+                  },
+                ),
+              ),
               titlesData: FlTitlesData(
                 topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -134,7 +161,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                 bottomTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
-                    reservedSize: 28,
+                    reservedSize: 36, // POPRAWKA: Zwiększono rozmiar, aby zmieścić dwuliniowy podpis (Data i Godzina)
                     interval: _getBottomTitleInterval(chronologicalReadings.length),
                     getTitlesWidget: (value, meta) {
                       int idx = value.toInt();
@@ -144,17 +171,21 @@ class _ChartsScreenState extends State<ChartsScreen> {
                       final reading = chronologicalReadings[idx];
                       String titleText = "";
 
+                      // POPRAWKA: Wykres miesięczny wyświetla teraz sformatowaną datę oraz godzinę w nowej linii
                       if (_selectedTimeframe == Timeframe.oneMonth) {
-                        titleText = "${reading.time.day.toString().padLeft(2, '0')}.${reading.time.month.toString().padLeft(2, '0')}";
+                        final dStr = "${reading.time.day.toString().padLeft(2, '0')}.${reading.time.month.toString().padLeft(2, '0')}";
+                        final hStr = "${reading.time.hour.toString().padLeft(2, '0')}:${reading.time.minute.toString().padLeft(2, '0')}";
+                        titleText = "$dStr\n$hStr";
                       } else {
                         titleText = "${reading.time.hour.toString().padLeft(2, '0')}:${reading.time.minute.toString().padLeft(2, '0')}";
                       }
 
                       return SideTitleWidget(
                         meta: meta,
-                        space: 8,
+                        space: 4,
                         child: Text(
                           titleText,
+                          textAlign: TextAlign.center, // Środkowanie tekstu wielolinijkowego
                           style: TextStyle(fontSize: 9, color: Colors.grey[600], fontWeight: FontWeight.w500),
                         ),
                       );
@@ -188,7 +219,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
               lineBarsData: [
                 LineChartBarData(
                   spots: spots,
-                  isCurved: _selectedTimeframe != Timeframe.oneMonth, // Wyłączenie zaokrągleń dla ogromnych zbiorów danych (wydajność)
+                  isCurved: _selectedTimeframe != Timeframe.oneMonth,
                   barWidth: 2.5,
                   color: Colors.blueAccent,
                   dotData: const FlDotData(show: false),
@@ -205,7 +236,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
           if (_selectedTimeframe == Timeframe.oneMonth) {
             chartWidget = SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              reverse: true, // Automatyczne przewinięcie do najnowszych wpisów po prawej stronie!
+              reverse: true, // Automatyczne przewinięcie do najnowszych wpisów po prawej stronie
               child: SizedBox(
                 // 14 pikseli szerokości przypada na każdy odczyt, gwarantując stałą i czytelną podziałkę
                 width: chronologicalReadings.length * 14.0,
@@ -277,7 +308,6 @@ class _ChartsScreenState extends State<ChartsScreen> {
     );
   }
 
-  // NAPRAWIONO: maxVal zmieniono na max zgodnie z parametrami metody
   Widget _buildStatsPanel(int min, int avg, int max) {
     return Container(
       padding: const EdgeInsets.all(12),

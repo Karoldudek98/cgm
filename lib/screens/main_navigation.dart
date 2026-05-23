@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'charts_screen.dart';
-import 'alerts_screen.dart';
+import 'events_screen.dart';
 import 'settings_screen.dart';
 
 class MainNavigation extends StatefulWidget {
@@ -17,7 +17,7 @@ class _MainNavigationState extends State<MainNavigation> {
   final List<Widget> _screens = [
     const HomeScreen(),
     const ChartsScreen(),
-    const AlertsScreen(),
+    const EventsScreen(),
     const SettingsScreen(),
   ];
 
@@ -36,7 +36,7 @@ class _MainNavigationState extends State<MainNavigation> {
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.show_chart), label: 'Wykresy'),
-          BottomNavigationBarItem(icon: Icon(Icons.notifications_active), label: 'Alerty'),
+          BottomNavigationBarItem(icon: Icon(Icons.notifications_active), label: 'Wydarzenia'),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Ustawienia'),
         ],
       ),

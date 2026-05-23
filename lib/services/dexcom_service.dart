@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
-// --- MODEL DANYCH Z PODWÓJNYM PARSEREM CZASU ---
 class GlucoseReading {
   final int value;
   final String direction;
@@ -57,7 +56,7 @@ class GlucoseReading {
     return {
       'Value': value,
       'Trend': direction,
-      'ST': time.toIso8601String(), // Bezpieczny format zapisu lokalnego
+      'ST': time.toIso8601String(),
     };
   }
 }
@@ -127,14 +126,11 @@ class DexcomService {
     }
   }
 
-  // --- NOWA LOGIKA: PRZECHOWYWANIE DO 1 MIESIĄCA (8640 REKORDÓW) ---
   Future<List<GlucoseReading>> getGlucoseHistory() async {
-    // 1. Wczytaj istniejącą historię z zaszyfrowanej pamięci podręcznej
     List<GlucoseReading> localHistory = await _loadOfflineHistory();
 
     if (_sessionId == null) return localHistory;
 
-    // Pobieramy ostatnie 24h z chmury, aby zabezpieczyć aplikację przed luki w danych (np. gdy była zamknięta)
     final url = Uri.https(_baseUrl, "/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues", {
       "sessionId": _sessionId!,
       "minutes": "1440",
@@ -155,7 +151,6 @@ class DexcomService {
         if (decoded is List) {
           List<GlucoseReading> apiReadings = decoded.map<GlucoseReading>((item) => GlucoseReading.fromJson(item)).toList();
 
-          // 2. ŁĄCZENIE I DEDUPLIKACJA za pomocą słownika Map (kluczem jest milisekundowy timestamp)
           final Map<int, GlucoseReading> mergedMap = {};
           
           for (var r in localHistory) {
@@ -167,16 +162,13 @@ class DexcomService {
 
           List<GlucoseReading> mergedList = mergedMap.values.toList();
           
-          // 3. SORTOWANIE (od najnowszego do najstarszego)
           mergedList.sort((a, b) => b.time.compareTo(a.time));
 
-          // 4. OGRANICZENIE RETENCJI: 30 dni * 288 odczytów = 8640 maks.
           const int maxRecords = 8640;
           if (mergedList.length > maxRecords) {
             mergedList = mergedList.sublist(0, maxRecords);
           }
 
-          // 5. ZAPIS DO PLIKU
           String serializedJson = jsonEncode(mergedList.map((r) => r.toJson()).toList());
           await _storage.write(key: "cached_glucose_history", value: serializedJson);
 
@@ -205,7 +197,6 @@ class DexcomService {
     return [];
   }
 
-  // --- PROGI ALARMOWE ---
   Future<Map<String, int>> getThresholds() async {
     if (_cachedThresholds != null) return _cachedThresholds!;
     String? vLow = await _storage.read(key: "thresh_very_low");
