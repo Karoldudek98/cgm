@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dexcom_service.dart';
 import 'events_service.dart';
 import '../models/user_event.dart';
+import '../models/glucose_reading.dart';
 
 class GlucoseDataService {
   static final GlucoseDataService _instance = GlucoseDataService._internal();

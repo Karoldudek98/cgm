@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/dexcom_service.dart';
+import '../models/glucose_reading.dart';
 
 class GlucoseDisplay extends StatelessWidget {
   final GlucoseReading reading;

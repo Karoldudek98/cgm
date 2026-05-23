@@ -1,65 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
-class GlucoseReading {
-  final int value;
-  final String direction;
-  final DateTime time;
-
-  GlucoseReading({required this.value, required this.direction, required this.time});
-
-  factory GlucoseReading.fromJson(Map<String, dynamic> json) {
-    final rawDate = json['ST']?.toString() ?? "";
-    DateTime parsedTime = DateTime.now();
-    
-    if (rawDate.contains("Date(")) {
-      final numbersOnly = rawDate.replaceAll(RegExp(r'[^0-9]'), '');
-      if (numbersOnly.isNotEmpty) {
-        parsedTime = DateTime.fromMillisecondsSinceEpoch(int.parse(numbersOnly));
-      }
-    } else if (rawDate.isNotEmpty) {
-      try {
-        parsedTime = DateTime.parse(rawDate);
-      } catch (e) {
-        print("Błąd parsowania daty ISO: $rawDate");
-      }
-    }
-    
-    String trendStr = "Flat";
-    if (json['Trend'] != null) {
-      if (json['Trend'] is int) {
-        int trendInt = json['Trend'];
-        switch (trendInt) {
-          case 1: trendStr = "DoubleUp"; break;
-          case 2: trendStr = "SingleUp"; break;
-          case 3: trendStr = "FortyFiveUp"; break;
-          case 4: trendStr = "Flat"; break;
-          case 5: trendStr = "FortyFiveDown"; break;
-          case 6: trendStr = "SingleDown"; break;
-          case 7: trendStr = "DoubleDown"; break;
-          default: trendStr = "Flat";
-        }
-      } else {
-        trendStr = json['Trend'].toString();
-      }
-    }
-
-    return GlucoseReading(
-      value: json['Value'] ?? 0,
-      direction: trendStr,
-      time: parsedTime,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'Value': value,
-      'Trend': direction,
-      'ST': time.toIso8601String(),
-    };
-  }
-}
+import '../models/glucose_reading.dart'; // Podpięcie zewnętrznego modelu
 
 class DexcomService {
   static final DexcomService _instance = DexcomService._internal();
@@ -126,11 +68,14 @@ class DexcomService {
     }
   }
 
+  // --- LOGIKA: PRZECHOWYWANIE DO 1 MIESIĄCA (8640 REKORDÓW) ---
   Future<List<GlucoseReading>> getGlucoseHistory() async {
+    // 1. Wczytaj istniejącą historię z zaszyfrowanej pamięci podręcznej
     List<GlucoseReading> localHistory = await _loadOfflineHistory();
 
     if (_sessionId == null) return localHistory;
 
+    // Pobieramy ostatnie 24h z chmury, aby zabezpieczyć aplikację przed lukami w danych (np. gdy była zamknięta)
     final url = Uri.https(_baseUrl, "/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues", {
       "sessionId": _sessionId!,
       "minutes": "1440",
@@ -151,6 +96,7 @@ class DexcomService {
         if (decoded is List) {
           List<GlucoseReading> apiReadings = decoded.map<GlucoseReading>((item) => GlucoseReading.fromJson(item)).toList();
 
+          // 2. ŁĄCZENIE I DEDUPLIKACJA za pomocą słownika Map (kluczem jest milisekundowy timestamp)
           final Map<int, GlucoseReading> mergedMap = {};
           
           for (var r in localHistory) {
@@ -162,13 +108,16 @@ class DexcomService {
 
           List<GlucoseReading> mergedList = mergedMap.values.toList();
           
+          // 3. SORTOWANIE (od najnowszego do najstarszego)
           mergedList.sort((a, b) => b.time.compareTo(a.time));
 
+          // 4. OGRANICZENIE RETENCJI: 30 dni * 288 odczytów = 8640 maks.
           const int maxRecords = 8640;
           if (mergedList.length > maxRecords) {
             mergedList = mergedList.sublist(0, maxRecords);
           }
 
+          // 5. ZAPIS DO PLIKU
           String serializedJson = jsonEncode(mergedList.map((r) => r.toJson()).toList());
           await _storage.write(key: "cached_glucose_history", value: serializedJson);
 
@@ -197,6 +146,7 @@ class DexcomService {
     return [];
   }
 
+  // --- PROGI ALARMOWE ---
   Future<Map<String, int>> getThresholds() async {
     if (_cachedThresholds != null) return _cachedThresholds!;
     String? vLow = await _storage.read(key: "thresh_very_low");

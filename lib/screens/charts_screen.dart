@@ -4,6 +4,7 @@ import '../services/glucose_data_service.dart';
 import '../services/dexcom_service.dart';
 import '../services/events_service.dart';
 import '../models/user_event.dart';
+import '../models/glucose_reading.dart';
 
 enum Timeframe { threeHours, sixHours, twelveHours, twentyFourHours, oneMonth }
 
