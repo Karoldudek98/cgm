@@ -72,15 +72,19 @@ class _EventsScreenState extends State<EventsScreen> {
 
   Widget _buildEventIcon(EventType type) {
     switch (type) {
-      case EventType.bg: return const CircleAvatar(backgroundColor: Colors.redAccent, child: Icon(Icons.water_drop, color: Colors.white));
+      case EventType.bg: return const CircleAvatar(backgroundColor: Colors.teal, child: Icon(Icons.water_drop, color: Colors.white));
       case EventType.insulin: return const CircleAvatar(backgroundColor: Colors.blueAccent, child: Icon(Icons.vaccines, color: Colors.white));
       case EventType.carbs: return const CircleAvatar(backgroundColor: Colors.orangeAccent, child: Icon(Icons.restaurant, color: Colors.white));
       case EventType.note: return const CircleAvatar(backgroundColor: Colors.grey, child: Icon(Icons.notes, color: Colors.white));
+      case EventType.hypo: return const CircleAvatar(backgroundColor: Colors.red, child: Icon(Icons.warning_amber_rounded, color: Colors.white));
+      case EventType.hyper: return const CircleAvatar(backgroundColor: Colors.amber, child: Icon(Icons.trending_up, color: Colors.white));
     }
   }
 
   String _getEventTitle(UserEvent e) {
     if (e.type == EventType.note) return "Notatka";
+    if (e.type == EventType.hypo) return "Epizod Hipoglikemii";
+    if (e.type == EventType.hyper) return "Epizod Hiperglikemii";
     if (e.value == null) return "Brak danych";
     
     switch (e.type) {
@@ -89,6 +93,20 @@ class _EventsScreenState extends State<EventsScreen> {
       case EventType.carbs: return "${e.value!.toInt()} g";
       default: return "";
     }
+  }
+
+  String _formatDateStr(UserEvent e) {
+    final startStr = "${e.timestamp.day.toString().padLeft(2,'0')}.${e.timestamp.month.toString().padLeft(2,'0')} ${e.timestamp.hour.toString().padLeft(2,'0')}:${e.timestamp.minute.toString().padLeft(2,'0')}";
+    
+    if (e.type == EventType.hypo || e.type == EventType.hyper) {
+      if (e.endTime != null) {
+        final endStr = "${e.endTime!.hour.toString().padLeft(2,'0')}:${e.endTime!.minute.toString().padLeft(2,'0')}";
+        return "Od: $startStr  Do: $endStr";
+      } else {
+        return "Rozpoczęto: $startStr";
+      }
+    }
+    return startStr;
   }
 
   @override
@@ -112,22 +130,28 @@ class _EventsScreenState extends State<EventsScreen> {
                   itemCount: _events.length,
                   itemBuilder: (context, index) {
                     final e = _events[index];
-                    final dateStr = "${e.timestamp.day.toString().padLeft(2,'0')}.${e.timestamp.month.toString().padLeft(2,'0')} ${e.timestamp.hour.toString().padLeft(2,'0')}:${e.timestamp.minute.toString().padLeft(2,'0')}";
                     
                     return Card(
                       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      color: (e.type == EventType.hypo || e.type == EventType.hyper) && e.endTime == null 
+                          ? Colors.red.withOpacity(0.05) 
+                          : Colors.white,
                       child: ListTile(
                         leading: _buildEventIcon(e.type),
                         title: Text(_getEventTitle(e), style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(dateStr, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                            Text(_formatDateStr(e), style: TextStyle(
+                              fontSize: 12, 
+                              color: e.endTime == null && (e.type == EventType.hypo || e.type == EventType.hyper) ? Colors.redAccent : Colors.grey,
+                              fontWeight: e.endTime == null ? FontWeight.bold : FontWeight.normal,
+                            )),
                             if (e.note != null && e.note!.isNotEmpty)
                               Text(e.note!, style: const TextStyle(fontStyle: FontStyle.italic)),
                           ],
                         ),
-                        trailing: PopupMenuButton<String>(
+                        trailing: e.isEditable ? PopupMenuButton<String>(
                           onSelected: (val) {
                             if (val == 'edit') _showEventForm(e);
                             if (val == 'delete') _deleteEvent(e.id);
@@ -136,7 +160,7 @@ class _EventsScreenState extends State<EventsScreen> {
                             const PopupMenuItem(value: 'edit', child: Text("Edytuj")),
                             const PopupMenuItem(value: 'delete', child: Text("Usuń", style: TextStyle(color: Colors.red))),
                           ],
-                        ),
+                        ) : const SizedBox.shrink(),
                       ),
                     );
                   },
@@ -144,7 +168,6 @@ class _EventsScreenState extends State<EventsScreen> {
     );
   }
 }
-
 
 class _EventForm extends StatefulWidget {
   final UserEvent? existingEvent;
@@ -190,7 +213,6 @@ class _EventFormState extends State<_EventForm> {
 
     if (!context.mounted) return;
 
-  
     final TimeOfDay? pickedTime = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_selectedTime),
@@ -231,6 +253,7 @@ class _EventFormState extends State<_EventForm> {
       type: _selectedType,
       value: val,
       note: _noteController.text.trim(),
+      isEditable: true,
     );
 
     widget.onSaved(newEvent);
@@ -289,6 +312,7 @@ class _EventFormState extends State<_EventForm> {
           TextField(
             controller: _noteController,
             textCapitalization: TextCapitalization.sentences,
+            maxLength: 300,
             decoration: const InputDecoration(labelText: "Notatka (Opcjonalna)", border: OutlineInputBorder()),
           ),
           const SizedBox(height: 20),

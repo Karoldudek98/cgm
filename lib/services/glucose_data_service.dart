@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dexcom_service.dart';
+import 'events_service.dart';
+import '../models/user_event.dart';
 
 class GlucoseDataService {
   static final GlucoseDataService _instance = GlucoseDataService._internal();
@@ -7,6 +9,7 @@ class GlucoseDataService {
   GlucoseDataService._internal();
 
   final _dexService = DexcomService();
+  final _eventsService = EventsService();
   Timer? _refreshTimer;
   
   List<GlucoseReading> _lastReadings = [];
@@ -24,15 +27,51 @@ class GlucoseDataService {
 
   Future<void> _fetchNow() async {
     final readings = await _dexService.getGlucoseHistory();
-    _lastReadings = readings;
-    _glucoseStreamController.add(readings);
-
     if (readings.isNotEmpty) {
-    print("--- DIAGNOSTYKA CZASU ---");
-    print("Czas telefonu (Local): ${DateTime.now()}");
-    print("Najnowszy odczyt z API: ${readings.first.time}");
-    print("Różnica w minutach: ${DateTime.now().difference(readings.first.time).inMinutes} min");
+      _lastReadings = readings;
+      
+      await _processEpisodes(readings.first);
+      
+      _glucoseStreamController.add(readings);
+    }
   }
+
+  Future<void> _processEpisodes(GlucoseReading latestReading) async {
+    final thresholds = _dexService.currentThresholds;
+    final isHypo = latestReading.value <= thresholds["low"]!;
+    final isHyper = latestReading.value >= thresholds["high"]!;
+
+    final openEpisode = await _eventsService.getOpenEpisode();
+
+    if (isHyper) {
+      if (openEpisode != null && openEpisode.type == EventType.hyper) return;
+      
+      if (openEpisode != null) await _eventsService.closeEpisode(openEpisode.id, latestReading.time); // Było hypo, zamknij
+      
+      
+      await _eventsService.saveEvent(UserEvent(
+        id: "sys_${DateTime.now().millisecondsSinceEpoch}",
+        timestamp: latestReading.time,
+        type: EventType.hyper,
+        isEditable: false,
+      ));
+    } else if (isHypo) {
+      if (openEpisode != null && openEpisode.type == EventType.hypo) return;
+      
+      if (openEpisode != null) await _eventsService.closeEpisode(openEpisode.id, latestReading.time);
+      
+      
+      await _eventsService.saveEvent(UserEvent(
+        id: "sys_${DateTime.now().millisecondsSinceEpoch}",
+        timestamp: latestReading.time,
+        type: EventType.hypo,
+        isEditable: false,
+      ));
+    } else {
+      if (openEpisode != null) {
+        await _eventsService.closeEpisode(openEpisode.id, latestReading.time);
+      }
+    }
   }
 
   void emitCurrentReading() {
