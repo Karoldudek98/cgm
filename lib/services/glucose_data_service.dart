@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dexcom_service.dart';
 import 'events_service.dart';
-import 'settings_service.dart'; // <--- DODANY IMPORT
+import 'settings_service.dart';
 import '../models/user_event.dart';
 import '../models/glucose_reading.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'notification_service.dart';
 
 class GlucoseDataService {
   static final GlucoseDataService _instance = GlucoseDataService._internal();
@@ -36,38 +38,80 @@ class GlucoseDataService {
     }
   }
 
-  Future<void> _processEpisodes(GlucoseReading latestReading) async {
-    // POPRAWKA: Pobieramy progi z nowego SettingsService
+Future<void> _processEpisodes(GlucoseReading latestReading) async {
     final thresholds = SettingsService().currentThresholds;
     final isHypo = latestReading.value <= thresholds["low"]!;
     final isHyper = latestReading.value >= thresholds["high"]!;
 
     final openEpisode = await _eventsService.getOpenEpisode();
+    final storage = const FlutterSecureStorage();
+    
+    final suppressedEventId = await storage.read(key: "suppressed_episode_id");
 
     if (isHyper) {
-      if (openEpisode != null && openEpisode.type == EventType.hyper) return;
+      if (openEpisode != null && openEpisode.type == EventType.hyper) {
+        if (openEpisode.id != suppressedEventId) {
+          await NotificationService().showGlucoseNotification(
+            "Hiperglikemia: ${latestReading.value}", 
+            "Wysoki poziom cukru.",
+            openEpisode.id
+          );
+        }
+        return;
+      }
+      
       if (openEpisode != null) await _eventsService.closeEpisode(openEpisode.id, latestReading.time);
       
+      final newEventId = "sys_${DateTime.now().millisecondsSinceEpoch}";
       await _eventsService.saveEvent(UserEvent(
-        id: "sys_${DateTime.now().millisecondsSinceEpoch}",
+        id: newEventId,
         timestamp: latestReading.time,
         type: EventType.hyper,
         isEditable: false,
       ));
+      
+      await NotificationService().showGlucoseNotification(
+        "Hiperglikemia: ${latestReading.value}", 
+        "Cukier przekroczył poziom ${thresholds["high"]}.",
+        newEventId
+      );
+
     } else if (isHypo) {
-      if (openEpisode != null && openEpisode.type == EventType.hypo) return;
+      if (openEpisode != null && openEpisode.type == EventType.hypo) {
+        if (openEpisode.id != suppressedEventId) {
+          await NotificationService().showGlucoseNotification(
+            "Hipoglikemia: ${latestReading.value}", 
+            "Niski poziom cukru.",
+            openEpisode.id
+          );
+        }
+        return;
+      }
+      
       if (openEpisode != null) await _eventsService.closeEpisode(openEpisode.id, latestReading.time);
       
+      final newEventId = "sys_${DateTime.now().millisecondsSinceEpoch}";
       await _eventsService.saveEvent(UserEvent(
-        id: "sys_${DateTime.now().millisecondsSinceEpoch}",
+        id: newEventId,
         timestamp: latestReading.time,
         type: EventType.hypo,
         isEditable: false,
       ));
+
+      await NotificationService().showGlucoseNotification(
+        "Hipoglikemia: ${latestReading.value}", 
+        "Cukier spadł poniżej poziomu ${thresholds["low"]}.",
+        newEventId
+      );
+
     } else {
       if (openEpisode != null) {
         await _eventsService.closeEpisode(openEpisode.id, latestReading.time);
       }
+      
+      await NotificationService().clearNotification();
+      
+      await storage.delete(key: "suppressed_episode_id");
     }
   }
 
