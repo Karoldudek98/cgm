@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/user_event.dart';
+import 'dexcom_service.dart';
 
 class EventsService {
   static final EventsService _instance = EventsService._internal();
@@ -9,7 +10,8 @@ class EventsService {
   EventsService._internal();
 
   final _storage = const FlutterSecureStorage();
-  final String _storageKey = "cached_user_events";
+  
+  String get _storageKey => "${DexcomService().currentUsername}_cached_user_events";
 
   final _eventsStreamController = StreamController<List<UserEvent>>.broadcast();
   Stream<List<UserEvent>> get eventsStream => _eventsStreamController.stream;

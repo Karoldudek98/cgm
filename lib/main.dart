@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'screens/main_navigation.dart';
-import 'screens/login_screen.dart'; // <--- Upewnij się, że ścieżka do Twojego ekranu logowania jest poprawna!
+import 'screens/login_screen.dart';
 import 'services/settings_service.dart';
-import 'services/dexcom_service.dart'; // <--- Dodajemy import DexcomService
+import 'services/dexcom_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SettingsService().init(); 
   
   runApp(const MyApp());
 }

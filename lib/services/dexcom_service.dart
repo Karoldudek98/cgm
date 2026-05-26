@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/glucose_reading.dart';
+import 'settings_service.dart';
 
 class DexcomService {
   static final DexcomService _instance = DexcomService._internal();
@@ -13,6 +14,11 @@ class DexcomService {
   static const String _appId = "d89443d2-327c-4a6f-89e5-496bbb0317db";
   
   String? _sessionId;
+  
+  String? _username;
+  String get currentUsername => _username ?? "default";
+  
+  String get _historyKey => "${currentUsername}_cached_glucose_history";
 
   Future<bool> initAndLogin() async {
     String? user = await _storage.read(key: "dex_user");
@@ -29,11 +35,7 @@ class DexcomService {
       final authResponse = await http.post(
         Uri.https(_baseUrl, "/ShareWebServices/Services/General/AuthenticatePublisherAccount"),
         headers: {"Content-Type": "application/json", "Accept": "application/json"},
-        body: jsonEncode({
-          "accountName": username.trim(),
-          "password": password,
-          "applicationId": _appId,
-        }),
+        body: jsonEncode({"accountName": username.trim(), "password": password, "applicationId": _appId}),
       );
 
       if (authResponse.statusCode != 200) return "Błąd autoryzacji (500)";
@@ -44,19 +46,20 @@ class DexcomService {
       final loginResponse = await http.post(
         Uri.https(_baseUrl, "/ShareWebServices/Services/General/LoginPublisherAccountById"),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "accountId": accountId,
-          "password": password,
-          "applicationId": _appId,
-        }),
+        body: jsonEncode({"accountId": accountId, "password": password, "applicationId": _appId}),
       );
 
       if (loginResponse.statusCode == 200) {
         final token = loginResponse.body.trim().replaceAll('"', '');
         if (token != "00000000-0000-0000-0000-000000000000") {
           _sessionId = token;
-          await _storage.write(key: "dex_user", value: username.trim());
+          
+          _username = username.trim();
+          await _storage.write(key: "dex_user", value: _username!);
           await _storage.write(key: "dex_pass", value: password);
+          
+          await SettingsService().loadForUser(_username!);
+          
           return "SUCCESS";
         }
       }
@@ -68,18 +71,14 @@ class DexcomService {
 
   Future<List<GlucoseReading>> getGlucoseHistory() async {
     List<GlucoseReading> localHistory = await _loadOfflineHistory();
-
     if (_sessionId == null) return localHistory;
 
     final url = Uri.https(_baseUrl, "/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues", {
-      "sessionId": _sessionId!,
-      "minutes": "1440",
-      "maxCount": "288",
+      "sessionId": _sessionId!, "minutes": "1440", "maxCount": "288",
     });
 
     try {
       final response = await http.post(url, headers: {"Content-Length": "0"});
-      
       if (response.body.contains("SessionNotValid")) {
         bool refreshed = await initAndLogin();
         if (refreshed) return getGlucoseHistory();
@@ -90,15 +89,10 @@ class DexcomService {
         final decoded = jsonDecode(response.body);
         if (decoded is List) {
           List<GlucoseReading> apiReadings = decoded.map<GlucoseReading>((item) => GlucoseReading.fromJson(item)).toList();
-
           final Map<int, GlucoseReading> mergedMap = {};
           
-          for (var r in localHistory) {
-            mergedMap[r.time.millisecondsSinceEpoch] = r;
-          }
-          for (var r in apiReadings) {
-            mergedMap[r.time.millisecondsSinceEpoch] = r;
-          }
+          for (var r in localHistory) mergedMap[r.time.millisecondsSinceEpoch] = r;
+          for (var r in apiReadings) mergedMap[r.time.millisecondsSinceEpoch] = r;
 
           List<GlucoseReading> mergedList = mergedMap.values.toList();
           mergedList.sort((a, b) => b.time.compareTo(a.time));
@@ -107,7 +101,7 @@ class DexcomService {
           if (mergedList.length > maxRecords) mergedList = mergedList.sublist(0, maxRecords);
 
           String serializedJson = jsonEncode(mergedList.map((r) => r.toJson()).toList());
-          await _storage.write(key: "cached_glucose_history", value: serializedJson);
+          await _storage.write(key: _historyKey, value: serializedJson);
 
           return mergedList;
         }
@@ -115,13 +109,12 @@ class DexcomService {
     } catch (e) {
       print("Błąd pobierania danych sieciowych: $e");
     }
-
     return localHistory;
   }
 
   Future<List<GlucoseReading>> _loadOfflineHistory() async {
     try {
-      String? cachedData = await _storage.read(key: "cached_glucose_history");
+      String? cachedData = await _storage.read(key: _historyKey);
       if (cachedData != null) {
         List<dynamic> jsonData = jsonDecode(cachedData);
         List<GlucoseReading> readings = jsonData.map<GlucoseReading>((item) => GlucoseReading.fromJson(item)).toList();
@@ -136,7 +129,11 @@ class DexcomService {
 
   Future<void> logout() async {
     _sessionId = null;
-    await _storage.deleteAll();
+    _username = null;
+    
+
+    await _storage.delete(key: "dex_user");
+    await _storage.delete(key: "dex_pass");
   }
 
   String? get sessionId => _sessionId;
