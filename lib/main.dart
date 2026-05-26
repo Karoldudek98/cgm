@@ -4,11 +4,13 @@ import 'screens/login_screen.dart';
 import 'services/settings_service.dart';
 import 'services/dexcom_service.dart';
 import 'services/notification_service.dart';
+import 'services/background_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await NotificationService().init();
+  await initializeBackgroundService();
   
   runApp(const MyApp());
 }

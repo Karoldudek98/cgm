@@ -26,19 +26,17 @@ class GlucoseDisplay extends StatelessWidget {
     if (value <= thresholds["low"]!) return Colors.redAccent;
     if (value >= thresholds["very_high"]!) return Colors.orange;
     if (value >= thresholds["high"]!) return Colors.orangeAccent;
-    return Colors.green; // W normie
+    return Colors.green;
   }
 
   @override
   Widget build(BuildContext context) {
-    // Nasłuchiwanie zmian jednostki z SettingsService w czasie rzeczywistym
     return ValueListenableBuilder<bool>(
       valueListenable: SettingsService().isMmolLNotifier,
       builder: (context, isMmol, child) {
         
         final double rawValue = reading.value.toDouble();
         
-        // Przeliczanie zależnie od wybranej jednostki
         final String valText = isMmol 
             ? (rawValue / 18.0).toStringAsFixed(1) 
             : rawValue.toInt().toString();

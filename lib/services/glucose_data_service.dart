@@ -33,12 +33,12 @@ class GlucoseDataService {
     final readings = await _dexService.getGlucoseHistory();
     if (readings.isNotEmpty) {
       _lastReadings = readings;
-      await _processEpisodes(readings.first);
+      await processEpisodes(readings.first);
       _glucoseStreamController.add(readings);
     }
   }
 
-Future<void> _processEpisodes(GlucoseReading latestReading) async {
+Future<void> processEpisodes(GlucoseReading latestReading) async {
     final thresholds = SettingsService().currentThresholds;
     final isHypo = latestReading.value <= thresholds["low"]!;
     final isHyper = latestReading.value >= thresholds["high"]!;

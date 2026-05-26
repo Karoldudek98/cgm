@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 @pragma('vm:entry-point')
 void onNotificationAction(NotificationResponse response) async {
   if (response.actionId == 'ok_action') {
-    final String? currentEventId = response.payload; // Odbieramy ID naszego epizodu
+    final String? currentEventId = response.payload; 
     
     if (currentEventId != null) {
       const storage = FlutterSecureStorage();
@@ -24,7 +24,7 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
 
-  Future<void> init() async {
+  Future<void> init({bool isBackground = false}) async {
     if (_isInitialized) return;
 
     const AndroidInitializationSettings androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -36,9 +36,11 @@ class NotificationService {
       onDidReceiveNotificationResponse: onNotificationAction,
     );
 
-    await _notificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
+    if (!isBackground) {
+      await _notificationsPlugin
+          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
+    }
 
     _isInitialized = true;
   }
