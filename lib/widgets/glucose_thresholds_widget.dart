@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../services/dexcom_service.dart';
 import '../services/glucose_data_service.dart';
+import '../models/glucose_reading.dart';
+import '../services/settings_service.dart';
 
 
 
@@ -12,7 +14,7 @@ class GlucoseThresholdsWidget extends StatefulWidget {
 }
 
 class _GlucoseThresholdsWidgetState extends State<GlucoseThresholdsWidget> {
-  final _dexService = DexcomService();
+  final _dexService = SettingsService();
   
   int _veryLow = 60;
   int _low = 70;

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dexcom_service.dart';
 import 'events_service.dart';
+import 'settings_service.dart'; // <--- DODANY IMPORT
 import '../models/user_event.dart';
 import '../models/glucose_reading.dart';
 
@@ -30,15 +31,14 @@ class GlucoseDataService {
     final readings = await _dexService.getGlucoseHistory();
     if (readings.isNotEmpty) {
       _lastReadings = readings;
-      
       await _processEpisodes(readings.first);
-      
       _glucoseStreamController.add(readings);
     }
   }
 
   Future<void> _processEpisodes(GlucoseReading latestReading) async {
-    final thresholds = _dexService.currentThresholds;
+    // POPRAWKA: Pobieramy progi z nowego SettingsService
+    final thresholds = SettingsService().currentThresholds;
     final isHypo = latestReading.value <= thresholds["low"]!;
     final isHyper = latestReading.value >= thresholds["high"]!;
 
@@ -46,9 +46,7 @@ class GlucoseDataService {
 
     if (isHyper) {
       if (openEpisode != null && openEpisode.type == EventType.hyper) return;
-      
-      if (openEpisode != null) await _eventsService.closeEpisode(openEpisode.id, latestReading.time); // Było hypo, zamknij
-      
+      if (openEpisode != null) await _eventsService.closeEpisode(openEpisode.id, latestReading.time);
       
       await _eventsService.saveEvent(UserEvent(
         id: "sys_${DateTime.now().millisecondsSinceEpoch}",
@@ -58,9 +56,7 @@ class GlucoseDataService {
       ));
     } else if (isHypo) {
       if (openEpisode != null && openEpisode.type == EventType.hypo) return;
-      
       if (openEpisode != null) await _eventsService.closeEpisode(openEpisode.id, latestReading.time);
-      
       
       await _eventsService.saveEvent(UserEvent(
         id: "sys_${DateTime.now().millisecondsSinceEpoch}",

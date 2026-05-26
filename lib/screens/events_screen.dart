@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/user_event.dart';
 import '../services/events_service.dart';
+import '../services/settings_service.dart';
 
 class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
@@ -81,14 +82,16 @@ class _EventsScreenState extends State<EventsScreen> {
     }
   }
 
-  String _getEventTitle(UserEvent e) {
+  String _getEventTitle(UserEvent e, bool isMmol) {
     if (e.type == EventType.note) return "Notatka";
     if (e.type == EventType.hypo) return "Epizod Hipoglikemii";
     if (e.type == EventType.hyper) return "Epizod Hiperglikemii";
     if (e.value == null) return "Brak danych";
     
     switch (e.type) {
-      case EventType.bg: return "${e.value!.toInt()} mg/dL";
+      case EventType.bg: 
+        if (isMmol) return "${(e.value! / 18.0).toStringAsFixed(1)} mmol/L";
+        return "${e.value!.toInt()} mg/dL";
       case EventType.insulin: return "${e.value} j.";
       case EventType.carbs: return "${e.value!.toInt()} g";
       default: return "";
@@ -103,7 +106,7 @@ class _EventsScreenState extends State<EventsScreen> {
         final endStr = "${e.endTime!.hour.toString().padLeft(2,'0')}:${e.endTime!.minute.toString().padLeft(2,'0')}";
         return "Od: $startStr  Do: $endStr";
       } else {
-        return "Rozpoczęto: $startStr";
+        return "Rozpoczęto: $startStr (W trwaniu...)";
       }
     }
     return startStr;
@@ -111,60 +114,60 @@ class _EventsScreenState extends State<EventsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Dzienniczek Zdarzeń"),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add, size: 28),
-            onPressed: () => _showEventForm(),
+    return ValueListenableBuilder<bool>(
+      valueListenable: SettingsService().isMmolLNotifier,
+      builder: (context, isMmol, child) {
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text("Dzienniczek Zdarzeń"),
+            centerTitle: true,
+            actions: [
+              IconButton(icon: const Icon(Icons.add, size: 28), onPressed: () => _showEventForm()),
+            ],
           ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _events.isEmpty
-              ? const Center(child: Text("Brak wpisów z ostatnich 30 dni.", style: TextStyle(color: Colors.grey)))
-              : ListView.builder(
-                  itemCount: _events.length,
-                  itemBuilder: (context, index) {
-                    final e = _events[index];
-                    
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      color: (e.type == EventType.hypo || e.type == EventType.hyper) && e.endTime == null 
-                          ? Colors.red.withOpacity(0.05) 
-                          : Colors.white,
-                      child: ListTile(
-                        leading: _buildEventIcon(e.type),
-                        title: Text(_getEventTitle(e), style: const TextStyle(fontWeight: FontWeight.bold)),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(_formatDateStr(e), style: TextStyle(
-                              fontSize: 12, 
-                              color: e.endTime == null && (e.type == EventType.hypo || e.type == EventType.hyper) ? Colors.redAccent : Colors.grey,
-                              fontWeight: e.endTime == null ? FontWeight.bold : FontWeight.normal,
-                            )),
-                            if (e.note != null && e.note!.isNotEmpty)
-                              Text(e.note!, style: const TextStyle(fontStyle: FontStyle.italic)),
-                          ],
-                        ),
-                        trailing: e.isEditable ? PopupMenuButton<String>(
-                          onSelected: (val) {
-                            if (val == 'edit') _showEventForm(e);
-                            if (val == 'delete') _deleteEvent(e.id);
-                          },
-                          itemBuilder: (ctx) => [
-                            const PopupMenuItem(value: 'edit', child: Text("Edytuj")),
-                            const PopupMenuItem(value: 'delete', child: Text("Usuń", style: TextStyle(color: Colors.red))),
-                          ],
-                        ) : const SizedBox.shrink(),
-                      ),
-                    );
-                  },
-                ),
+          body: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _events.isEmpty
+                  ? const Center(child: Text("Brak wpisów z ostatnich 30 dni.", style: TextStyle(color: Colors.grey)))
+                  : ListView.builder(
+                      itemCount: _events.length,
+                      itemBuilder: (context, index) {
+                        final e = _events[index];
+                        return Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          color: (e.type == EventType.hypo || e.type == EventType.hyper) && e.endTime == null 
+                              ? Colors.red.withOpacity(0.05) : Colors.white,
+                          child: ListTile(
+                            leading: _buildEventIcon(e.type),
+                            title: Text(_getEventTitle(e, isMmol), style: const TextStyle(fontWeight: FontWeight.bold)),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(_formatDateStr(e), style: TextStyle(
+                                  fontSize: 12, 
+                                  color: e.endTime == null && (e.type == EventType.hypo || e.type == EventType.hyper) ? Colors.redAccent : Colors.grey,
+                                  fontWeight: e.endTime == null ? FontWeight.bold : FontWeight.normal,
+                                )),
+                                if (e.note != null && e.note!.isNotEmpty)
+                                  Text(e.note!, style: const TextStyle(fontStyle: FontStyle.italic)),
+                              ],
+                            ),
+                            trailing: e.isEditable ? PopupMenuButton<String>(
+                              onSelected: (val) {
+                                if (val == 'edit') _showEventForm(e);
+                                if (val == 'delete') _deleteEvent(e.id);
+                              },
+                              itemBuilder: (ctx) => [
+                                const PopupMenuItem(value: 'edit', child: Text("Edytuj")),
+                                const PopupMenuItem(value: 'delete', child: Text("Usuń", style: TextStyle(color: Colors.red))),
+                              ],
+                            ) : const SizedBox.shrink(),
+                          ),
+                        );
+                      },
+                    ),
+        );
+      }
     );
   }
 }
@@ -188,10 +191,21 @@ class _EventFormState extends State<_EventForm> {
   @override
   void initState() {
     super.initState();
+    final isMmol = SettingsService().isMmolL;
+
     if (widget.existingEvent != null) {
       _selectedType = widget.existingEvent!.type;
       _selectedTime = widget.existingEvent!.timestamp;
-      _valueController.text = widget.existingEvent!.value?.toString() ?? "";
+      
+      if (_selectedType == EventType.bg && widget.existingEvent!.value != null) {
+        if (isMmol) {
+          _valueController.text = (widget.existingEvent!.value! / 18.0).toStringAsFixed(1);
+        } else {
+          _valueController.text = widget.existingEvent!.value!.toInt().toString();
+        }
+      } else {
+        _valueController.text = widget.existingEvent!.value?.toString() ?? "";
+      }
       _noteController.text = widget.existingEvent!.note ?? "";
     } else {
       _selectedType = EventType.bg;
@@ -201,7 +215,6 @@ class _EventFormState extends State<_EventForm> {
 
   Future<void> _pickDateTime() async {
     final now = DateTime.now();
-
     final DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: _selectedTime.isBefore(now) ? _selectedTime : now,
@@ -209,9 +222,7 @@ class _EventFormState extends State<_EventForm> {
       lastDate: now,
     );
 
-    if (pickedDate == null) return;
-
-    if (!context.mounted) return;
+    if (pickedDate == null || !context.mounted) return;
 
     final TimeOfDay? pickedTime = await showTimePicker(
       context: context,
@@ -220,33 +231,24 @@ class _EventFormState extends State<_EventForm> {
 
     if (pickedTime == null) return;
 
-    final selectedDateTime = DateTime(
-      pickedDate.year,
-      pickedDate.month,
-      pickedDate.day,
-      pickedTime.hour,
-      pickedTime.minute,
-    );
+    final selectedDateTime = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
 
     if (selectedDateTime.isAfter(now)) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Nie możesz zapisać zdarzenia z przyszłości!"),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Nie możesz zapisać zdarzenia z przyszłości!"), backgroundColor: Colors.redAccent));
       return;
     }
 
-    setState(() {
-      _selectedTime = selectedDateTime;
-    });
+    setState(() => _selectedTime = selectedDateTime);
   }
 
   void _submit() {
-    final val = double.tryParse(_valueController.text.replaceAll(',', '.'));
+    double? val = double.tryParse(_valueController.text.replaceAll(',', '.'));
     
+    if (val != null && _selectedType == EventType.bg && SettingsService().isMmolL) {
+      val = val * 18.0; 
+    }
+
     final newEvent = UserEvent(
       id: widget.existingEvent?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
       timestamp: _selectedTime,
@@ -262,6 +264,8 @@ class _EventFormState extends State<_EventForm> {
 
   @override
   Widget build(BuildContext context) {
+    final isMmol = SettingsService().isMmolL;
+
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Column(
@@ -273,12 +277,15 @@ class _EventFormState extends State<_EventForm> {
             value: _selectedType,
             decoration: const InputDecoration(labelText: "Rodzaj wpisu", border: OutlineInputBorder()),
             items: const [
-              DropdownMenuItem(value: EventType.bg, child: Text("Glikemia")),
+              DropdownMenuItem(value: EventType.bg, child: Text("Glikemia (Glukometr)")),
               DropdownMenuItem(value: EventType.insulin, child: Text("Insulina")),
-              DropdownMenuItem(value: EventType.carbs, child: Text("Posiłek")),
-              DropdownMenuItem(value: EventType.note, child: Text("Notatka")),
+              DropdownMenuItem(value: EventType.carbs, child: Text("Posiłek (Węglowodany)")),
+              DropdownMenuItem(value: EventType.note, child: Text("Tylko notatka")),
             ],
-            onChanged: (val) => setState(() => _selectedType = val!),
+            onChanged: (val) => setState(() {
+              _selectedType = val!;
+              _valueController.clear();
+            }),
           ),
           const SizedBox(height: 16),
           Row(
@@ -290,11 +297,7 @@ class _EventFormState extends State<_EventForm> {
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
                 ),
               ),
-              OutlinedButton.icon(
-                onPressed: _pickDateTime, 
-                icon: const Icon(Icons.calendar_month, size: 18),
-                label: const Text("Zmień"),
-              ),
+              OutlinedButton.icon(onPressed: _pickDateTime, icon: const Icon(Icons.calendar_month, size: 18), label: const Text("Zmień")),
             ],
           ),
           const SizedBox(height: 12),
@@ -304,7 +307,7 @@ class _EventFormState extends State<_EventForm> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               decoration: InputDecoration(
                 labelText: "Wartość",
-                hintText: _selectedType == EventType.bg ? "np. 120" : _selectedType == EventType.carbs ? "np. 45" : "np. 5.5",
+                hintText: _selectedType == EventType.bg ? (isMmol ? "np. 5.5" : "np. 120") : _selectedType == EventType.carbs ? "np. 45" : "np. 6.5",
                 border: const OutlineInputBorder(),
               ),
             ),
