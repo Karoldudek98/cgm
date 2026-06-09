@@ -18,7 +18,7 @@ class ChartsScreen extends StatefulWidget {
 class _ChartsScreenState extends State<ChartsScreen> {
   final _dataService = GlucoseDataService();
   final _eventsService = EventsService();
-  Timeframe _selectedTimeframe = Timeframe.twentyFourHours;
+  Timeframe _selectedTimeframe = Timeframe.threeHours;
 
   @override
   void initState() {
