@@ -137,6 +137,10 @@ class DexcomService {
     }
   }
 
+  Future<List<GlucoseReading>> getCachedHistory() async {
+    return await _loadOfflineHistory();
+  }
+
   Future<List<GlucoseReading>> _loadOfflineHistory() async {
     try {
       String? cachedData = await _storage.read(key: _historyKey);

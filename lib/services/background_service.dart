@@ -81,6 +81,8 @@ void onStart(ServiceInstance service) async {
         }
 
         await GlucoseDataService().processEpisodes(latest);
+        
+        service.invoke('new_data');
       }
     }
   });

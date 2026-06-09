@@ -1,11 +1,12 @@
 import 'dart:async';
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dexcom_service.dart';
 import 'events_service.dart';
 import 'settings_service.dart';
+import 'notification_service.dart';
 import '../models/user_event.dart';
 import '../models/glucose_reading.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'notification_service.dart';
 
 class GlucoseDataService {
   static final GlucoseDataService _instance = GlucoseDataService._internal();
@@ -14,7 +15,6 @@ class GlucoseDataService {
 
   final _dexService = DexcomService();
   final _eventsService = EventsService();
-  Timer? _refreshTimer;
   
   List<GlucoseReading> _lastReadings = [];
 
@@ -23,22 +23,38 @@ class GlucoseDataService {
 
   List<GlucoseReading> get lastReadings => _lastReadings;
 
+  void emitCurrentReading() {
+    if (_lastReadings.isNotEmpty) {
+      _glucoseStreamController.add(_lastReadings);
+      processEpisodes(_lastReadings.first);
+    }
+  }
+
   void startUpdates() {
-    _refreshTimer?.cancel();
     _fetchNow();
-    _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) => _fetchNow());
+    
+    FlutterBackgroundService().on('new_data').listen((event) {
+      _updateFromCache();
+    });
   }
 
   Future<void> _fetchNow() async {
     final readings = await _dexService.getGlucoseHistory();
     if (readings.isNotEmpty) {
       _lastReadings = readings;
-      await processEpisodes(readings.first);
       _glucoseStreamController.add(readings);
     }
   }
 
-Future<void> processEpisodes(GlucoseReading latestReading) async {
+  Future<void> _updateFromCache() async {
+    final readings = await _dexService.getCachedHistory();
+    if (readings.isNotEmpty) {
+      _lastReadings = readings;
+      _glucoseStreamController.add(readings);
+    }
+  }
+
+  Future<void> processEpisodes(GlucoseReading latestReading) async {
     final thresholds = SettingsService().currentThresholds;
     final isHypo = latestReading.value <= thresholds["low"]!;
     final isHyper = latestReading.value >= thresholds["high"]!;
@@ -47,14 +63,16 @@ Future<void> processEpisodes(GlucoseReading latestReading) async {
     final storage = const FlutterSecureStorage();
     
     final suppressedEventId = await storage.read(key: "suppressed_episode_id");
+    final useVibes = SettingsService().useVibrations;
 
     if (isHyper) {
       if (openEpisode != null && openEpisode.type == EventType.hyper) {
         if (openEpisode.id != suppressedEventId) {
-          await NotificationService().showGlucoseNotification(
+          await NotificationService().showHyperNotification(
             "Hiperglikemia: ${latestReading.value}", 
             "Wysoki poziom cukru.",
-            openEpisode.id
+            openEpisode.id,
+            useVibes
           );
         }
         return;
@@ -70,19 +88,21 @@ Future<void> processEpisodes(GlucoseReading latestReading) async {
         isEditable: false,
       ));
       
-      await NotificationService().showGlucoseNotification(
+      await NotificationService().showHyperNotification(
         "Hiperglikemia: ${latestReading.value}", 
         "Cukier przekroczył poziom ${thresholds["high"]}.",
-        newEventId
+        newEventId,
+        useVibes
       );
 
     } else if (isHypo) {
       if (openEpisode != null && openEpisode.type == EventType.hypo) {
         if (openEpisode.id != suppressedEventId) {
-          await NotificationService().showGlucoseNotification(
+          await NotificationService().showHypoNotification(
             "Hipoglikemia: ${latestReading.value}", 
             "Niski poziom cukru.",
-            openEpisode.id
+            openEpisode.id,
+            useVibes
           );
         }
         return;
@@ -98,10 +118,11 @@ Future<void> processEpisodes(GlucoseReading latestReading) async {
         isEditable: false,
       ));
 
-      await NotificationService().showGlucoseNotification(
+      await NotificationService().showHypoNotification(
         "Hipoglikemia: ${latestReading.value}", 
         "Cukier spadł poniżej poziomu ${thresholds["low"]}.",
-        newEventId
+        newEventId,
+        useVibes
       );
 
     } else {
@@ -110,16 +131,7 @@ Future<void> processEpisodes(GlucoseReading latestReading) async {
       }
       
       await NotificationService().clearNotification();
-      
       await storage.delete(key: "suppressed_episode_id");
     }
-  }
-
-  void emitCurrentReading() {
-    _glucoseStreamController.add(_lastReadings);
-  }
-
-  void stopUpdates() {
-    _refreshTimer?.cancel();
   }
 }

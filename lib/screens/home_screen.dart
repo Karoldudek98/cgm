@@ -54,7 +54,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SizedBox(
                   height: MediaQuery.of(context).size.height * 0.7,
                   child: Center(
-                    child: GlucoseDisplay(reading: latestReading),
+                    child: GlucoseDisplay(glucoseValue: latestReading.value),
                   ),
                 ),
               ],
