@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -14,10 +15,13 @@ class DexcomService {
   static const String _appId = "d89443d2-327c-4a6f-89e5-496bbb0317db";
   
   String? _sessionId;
-  
+
   String? _username;
-  String get currentUsername => _username ?? "default";
+
+  bool _isFetching = false; 
   
+  String get currentUsername => _username ?? "default";
+
   String get _historyKey => "${currentUsername}_cached_glucose_history";
 
   Future<bool> initAndLogin() async {
@@ -36,7 +40,7 @@ class DexcomService {
         Uri.https(_baseUrl, "/ShareWebServices/Services/General/AuthenticatePublisherAccount"),
         headers: {"Content-Type": "application/json", "Accept": "application/json"},
         body: jsonEncode({"accountName": username.trim(), "password": password, "applicationId": _appId}),
-      );
+      ).timeout(const Duration(seconds: 15)); 
 
       if (authResponse.statusCode != 200) return "Błąd autoryzacji (500)";
       
@@ -47,41 +51,56 @@ class DexcomService {
         Uri.https(_baseUrl, "/ShareWebServices/Services/General/LoginPublisherAccountById"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"accountId": accountId, "password": password, "applicationId": _appId}),
-      );
+      ).timeout(const Duration(seconds: 15));
 
       if (loginResponse.statusCode == 200) {
         final token = loginResponse.body.trim().replaceAll('"', '');
         if (token != "00000000-0000-0000-0000-000000000000") {
           _sessionId = token;
-          
           _username = username.trim();
           await _storage.write(key: "dex_user", value: _username!);
           await _storage.write(key: "dex_pass", value: password);
-          
           await SettingsService().loadForUser(_username!);
           
           return "SUCCESS";
         }
       }
       return "Błąd generowania sesji.";
+    } on TimeoutException {
+      return "Błąd: Przekroczono czas oczekiwania na logowanie.";
     } catch (e) {
       return "Błąd połączenia: $e";
     }
   }
 
-  Future<List<GlucoseReading>> getGlucoseHistory() async {
-    List<GlucoseReading> localHistory = await _loadOfflineHistory();
-    if (_sessionId == null) return localHistory;
+  Future<List<GlucoseReading>> getGlucoseHistory({int retryCount = 0}) async {
+    if (_isFetching) {
+      print("Zablokowano równoczesne pobieranie danych (race condition).");
+      return _loadOfflineHistory(); 
+    }
 
-    final url = Uri.https(_baseUrl, "/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues", {
-      "sessionId": _sessionId!, "minutes": "1440", "maxCount": "288",
-    });
+    _isFetching = true;
 
     try {
-      final response = await http.post(url, headers: {"Content-Length": "0"});
+      List<GlucoseReading> localHistory = await _loadOfflineHistory();
+      if (_sessionId == null) return localHistory;
+
+      final url = Uri.https(_baseUrl, "/ShareWebServices/Services/Publisher/ReadPublisherLatestGlucoseValues", {
+        "sessionId": _sessionId!, "minutes": "1440", "maxCount": "288",
+      });
+
+      final response = await http.post(url, headers: {"Content-Length": "0"}).timeout(const Duration(seconds: 15));
+      
       if (response.body.contains("SessionNotValid")) {
+        if (retryCount >= 1) {
+          print("Przerwano zapętlenie odświeżania sesji.");
+          return localHistory; 
+        }
+
         bool refreshed = await initAndLogin();
-        if (refreshed) return getGlucoseHistory();
+        if (refreshed) {
+          return await getGlucoseHistory(retryCount: retryCount + 1); 
+        }
         return localHistory;
       }
 
@@ -106,10 +125,16 @@ class DexcomService {
           return mergedList;
         }
       }
+      return localHistory;
+    } on TimeoutException {
+      print("Błąd: Serwer Dexcom nie odpowiedział w czasie 15s.");
+      return _loadOfflineHistory();
     } catch (e) {
       print("Błąd pobierania danych sieciowych: $e");
+      return _loadOfflineHistory();
+    } finally {
+      _isFetching = false;
     }
-    return localHistory;
   }
 
   Future<List<GlucoseReading>> _loadOfflineHistory() async {
@@ -129,9 +154,7 @@ class DexcomService {
 
   Future<void> logout() async {
     _sessionId = null;
-    _username = null;
-    
-
+    _username = null; 
     await _storage.delete(key: "dex_user");
     await _storage.delete(key: "dex_pass");
   }
