@@ -2,8 +2,14 @@ class GlucoseReading {
   final int value;
   final String direction;
   final DateTime time;
+  final int trend;
 
-  GlucoseReading({required this.value, required this.direction, required this.time});
+  GlucoseReading({
+    required this.value, 
+    required this.direction, 
+    required this.time,
+    required this.trend, 
+  });
 
   factory GlucoseReading.fromJson(Map<String, dynamic> json) {
     final rawDate = json['ST']?.toString() ?? "";
@@ -23,9 +29,11 @@ class GlucoseReading {
     }
     
     String trendStr = "Flat";
+    int trendInt = 0;
+    
     if (json['Trend'] != null) {
       if (json['Trend'] is int) {
-        int trendInt = json['Trend'];
+        trendInt = json['Trend']; 
         switch (trendInt) {
           case 1: trendStr = "DoubleUp"; break;
           case 2: trendStr = "SingleUp"; break;
@@ -38,6 +46,17 @@ class GlucoseReading {
         }
       } else {
         trendStr = json['Trend'].toString();
+        switch (trendStr) {
+          case "DoubleUp": trendInt = 1; break;
+          case "SingleUp": trendInt = 2; break;
+          case "FortyFiveUp": trendInt = 3; break;
+          case "Flat": trendInt = 4; break;
+          case "FortyFiveDown": trendInt = 5; break;
+          case "SingleDown": trendInt = 6; break;
+          case "DoubleDown": trendInt = 7; break;
+          default: 
+            trendInt = int.tryParse(trendStr) ?? 0;
+        }
       }
     }
 
@@ -45,13 +64,15 @@ class GlucoseReading {
       value: json['Value'] ?? 0,
       direction: trendStr,
       time: parsedTime,
+      trend: trendInt, 
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'Value': value,
-      'Trend': direction,
+      'TrendString': direction,
+      'Trend': trend, 
       'ST': time.toIso8601String(),
     };
   }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../services/glucose_data_service.dart';
 import '../widgets/glucose_display.dart';
 import '../models/glucose_reading.dart';
+import '../widgets/mini_glucose_chart.dart';
+import '../widgets/glucose_summary_widget.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -52,11 +54,29 @@ class _HomeScreenState extends State<HomeScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               children: [
                 SizedBox(
-                  height: MediaQuery.of(context).size.height * 0.7,
+                  height: MediaQuery.of(context).size.height * 0.35,
                   child: Center(
-                    child: GlucoseDisplay(glucoseValue: latestReading.value),
+                    child: GlucoseDisplay(
+                      glucoseValue: latestReading.value,
+                      trend: latestReading.trend,
+                      timestamp: latestReading.time,
+                    ),
                   ),
                 ),
+                
+                const SizedBox(height: 16),
+
+                MiniGlucoseChart(
+                  readings: readings,
+                ),
+
+                const SizedBox(height: 16),
+
+                GlucoseSummaryWidget(
+                  readings: readings,
+                ),
+                
+                const SizedBox(height: 32),
               ],
             ),
           );
