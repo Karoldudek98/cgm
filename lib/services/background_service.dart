@@ -29,7 +29,7 @@ Future<void> initializeBackgroundService() async {
       onStart: onStart,
       autoStart: true,
       isForegroundMode: true,
-      notificationChannelId: 'cgm_foreground',
+      notificationChannelId: 'silent_cgm_channel',
       initialNotificationTitle: 'Monitor CGM jest aktywny',
       initialNotificationContent: 'Oczekiwanie na pobranie danych...',
       foregroundServiceNotificationId: 888,

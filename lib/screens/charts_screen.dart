@@ -26,28 +26,23 @@ class _ChartsScreenState extends State<ChartsScreen> {
     _eventsService.getEvents();
   }
 
-  List<GlucoseReading> _filterReadings(List<GlucoseReading> allReadings) {
-    final now = DateTime.now();
-    DateTime cutoff;
-
+  DateTime _getMinTime(DateTime maxTime) {
     switch (_selectedTimeframe) {
-      case Timeframe.threeHours: cutoff = now.subtract(const Duration(hours: 3)); break;
-      case Timeframe.sixHours: cutoff = now.subtract(const Duration(hours: 6)); break;
-      case Timeframe.twelveHours: cutoff = now.subtract(const Duration(hours: 12)); break;
-      case Timeframe.twentyFourHours: cutoff = now.subtract(const Duration(hours: 24)); break;
-      case Timeframe.oneMonth: cutoff = now.subtract(const Duration(days: 30)); break;
+      case Timeframe.threeHours: return maxTime.subtract(const Duration(hours: 3));
+      case Timeframe.sixHours: return maxTime.subtract(const Duration(hours: 6));
+      case Timeframe.twelveHours: return maxTime.subtract(const Duration(hours: 12));
+      case Timeframe.twentyFourHours: return maxTime.subtract(const Duration(hours: 24));
+      case Timeframe.oneMonth: return maxTime.subtract(const Duration(days: 30));
     }
-    return allReadings.where((r) => r.time.isAfter(cutoff)).toList();
   }
 
-  double _getBottomTitleInterval(int totalPoints) {
-    if (totalPoints == 0) return 1.0;
+  double _getXInterval() {
     switch (_selectedTimeframe) {
-      case Timeframe.threeHours: return 6;
-      case Timeframe.sixHours: return 12;
-      case Timeframe.twelveHours: return 24;
-      case Timeframe.twentyFourHours: return 48;
-      case Timeframe.oneMonth: return 72;
+      case Timeframe.threeHours: return 3600000; 
+      case Timeframe.sixHours: return 7200000; 
+      case Timeframe.twelveHours: return 14400000; 
+      case Timeframe.twentyFourHours: return 21600000; 
+      case Timeframe.oneMonth: return 21600000; 
     }
   }
 
@@ -134,12 +129,21 @@ class _ChartsScreenState extends State<ChartsScreen> {
                 return const Center(child: Text("Brak dostępnych danych."));
               }
 
-              // POPRAWKA: Używamy SettingsService zamiast DexcomService
               final thresholds = SettingsService().currentThresholds;
               final double lowLimit = thresholds["low"]!.toDouble() / factor;
               final double highLimit = thresholds["high"]!.toDouble() / factor;
 
-              final filteredReadings = _filterReadings(allReadings);
+              final now = DateTime.now();
+              final referenceTime = allReadings.isNotEmpty ? allReadings.first.time : now;
+              
+              final maxTime = referenceTime;
+              final minTime = _getMinTime(maxTime);
+
+              final minX = minTime.millisecondsSinceEpoch.toDouble();
+              final maxX = maxTime.millisecondsSinceEpoch.toDouble();
+              final xInterval = _getXInterval();
+
+              final filteredReadings = allReadings.where((r) => r.time.isAfter(minTime) || r.time.isAtSameMomentAs(minTime)).toList();
               final chronologicalReadings = filteredReadings.reversed.toList();
 
               if (chronologicalReadings.isEmpty) {
@@ -158,7 +162,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                   final allEvents = snapshotEv.data ?? [];
                   final manualEvents = allEvents.where((e) => e.type != EventType.hypo && e.type != EventType.hyper).toList();
 
-                  Map<int, List<UserEvent>> eventsByXIndex = {};
+                  Map<double, List<UserEvent>> eventsByXValue = {};
                   for (var event in manualEvents) {
                     int closestIdx = -1;
                     int minDiff = 15 * 60 * 1000;
@@ -169,12 +173,15 @@ class _ChartsScreenState extends State<ChartsScreen> {
                         closestIdx = i;
                       }
                     }
-                    if (closestIdx != -1) eventsByXIndex.putIfAbsent(closestIdx, () => []).add(event);
+                    if (closestIdx != -1) {
+                      final xVal = chronologicalReadings[closestIdx].time.millisecondsSinceEpoch.toDouble();
+                      eventsByXValue.putIfAbsent(xVal, () => []).add(event);
+                    }
                   }
 
                   List<FlSpot> spots = [];
                   for (int i = 0; i < chronologicalReadings.length; i++) {
-                    spots.add(FlSpot(i.toDouble(), chronologicalReadings[i].value / factor));
+                    spots.add(FlSpot(chronologicalReadings[i].time.millisecondsSinceEpoch.toDouble(), chronologicalReadings[i].value / factor));
                   }
 
                   final values = chronologicalReadings.map((r) => r.value).toList();
@@ -184,21 +191,41 @@ class _ChartsScreenState extends State<ChartsScreen> {
 
                   Widget chartWidget = LineChart(
                     LineChartData(
+                      clipData: const FlClipData.all(),
+                      minX: minX,
+                      maxX: maxX,
                       minY: 40 / factor,
                       maxY: 300 / factor,
                       gridData: FlGridData(
                         show: true,
-                        drawVerticalLine: false,
+                        drawVerticalLine: true,
                         horizontalInterval: isMmol ? 2.0 : 40.0,
+                        verticalInterval: xInterval,
                         getDrawingHorizontalLine: (value) => FlLine(color: Colors.grey.withOpacity(0.12), strokeWidth: 1),
+                        getDrawingVerticalLine: (value) => FlLine(color: Colors.grey.withOpacity(0.1), strokeWidth: 1),
                       ),
                       lineTouchData: LineTouchData(
                         handleBuiltInTouches: true,
+                        getTouchedSpotIndicator: (LineChartBarData barData, List<int> spotIndexes) {
+                          return spotIndexes.map((spotIndex) {
+                            return TouchedSpotIndicatorData(
+                              const FlLine(color: Colors.blueAccent, strokeWidth: 3),
+                              FlDotData(
+                                getDotPainter: (spot, percent, barData, index) {
+                                  return FlDotCirclePainter(radius: 6, color: Colors.blueAccent, strokeWidth: 2, strokeColor: Colors.white);
+                                },
+                              ),
+                            );
+                          }).toList();
+                        },
                         touchCallback: (FlTouchEvent event, LineTouchResponse? touchResponse) {
                           if (event is FlTapUpEvent && touchResponse?.lineBarSpots != null) {
-                            final spotIndex = touchResponse!.lineBarSpots!.first.x.toInt();
-                            if (eventsByXIndex.containsKey(spotIndex)) {
-                              _showEventsModal(context, eventsByXIndex[spotIndex]!, isMmol);
+                            final relevantSpots = touchResponse!.lineBarSpots!.where((spot) => spot.barIndex == 1);
+                            if (relevantSpots.isNotEmpty) {
+                              final xVal = relevantSpots.first.x;
+                              if (eventsByXValue.containsKey(xVal)) {
+                                _showEventsModal(context, eventsByXValue[xVal]!, isMmol);
+                              }
                             }
                           }
                         },
@@ -206,34 +233,32 @@ class _ChartsScreenState extends State<ChartsScreen> {
                           getTooltipColor: (LineBarSpot touchedSpot) => Colors.blueGrey.withOpacity(0.95),
                           getTooltipItems: (List<LineBarSpot> touchedSpots) {
                             return touchedSpots.map((LineBarSpot touchedSpot) {
-                              int idx = touchedSpot.x.toInt();
-                              if (idx >= 0 && idx < chronologicalReadings.length) {
-                                final reading = chronologicalReadings[idx];
-                                final timeStr = "${reading.time.hour.toString().padLeft(2, '0')}:${reading.time.minute.toString().padLeft(2, '0')}";
-                                
-                                final valStr = isMmol ? (reading.value / 18.0).toStringAsFixed(1) : reading.value.toString();
-                                String tooltipText = "$valStr $unit\n$timeStr";
+                              if (touchedSpot.barIndex == 0) return null;
 
-                                if (eventsByXIndex.containsKey(idx)) {
-                                  final eventsAtSpot = eventsByXIndex[idx]!;
-                                  tooltipText += "\n---";
-                                  for (var e in eventsAtSpot) {
-                                    if (e.type == EventType.insulin) tooltipText += "\n💉 ${e.value} j.";
-                                    else if (e.type == EventType.carbs) tooltipText += "\n🍎 ${e.value?.toInt()} g";
-                                    else if (e.type == EventType.bg) {
-                                      final v = isMmol ? (e.value! / 18.0).toStringAsFixed(1) : e.value!.toInt().toString();
-                                      tooltipText += "\n🩸 $v $unit";
-                                    }
-                                    else if (e.type == EventType.note) {
-                                      String shortNote = e.note ?? "";
-                                      if (shortNote.length > 15) shortNote = "${shortNote.substring(0, 15)}...";
-                                      tooltipText += "\n📝 $shortNote";
-                                    }
+                              final time = DateTime.fromMillisecondsSinceEpoch(touchedSpot.x.toInt());
+                              final timeStr = "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
+                              
+                              final valStr = isMmol ? touchedSpot.y.toStringAsFixed(1) : (touchedSpot.y).round().toString();
+                              String tooltipText = "$valStr $unit\n$timeStr";
+
+                              if (eventsByXValue.containsKey(touchedSpot.x)) {
+                                final eventsAtSpot = eventsByXValue[touchedSpot.x]!;
+                                tooltipText += "\n---";
+                                for (var e in eventsAtSpot) {
+                                  if (e.type == EventType.insulin) tooltipText += "\n💉 ${e.value} j.";
+                                  else if (e.type == EventType.carbs) tooltipText += "\n🍎 ${e.value?.toInt()} g";
+                                  else if (e.type == EventType.bg) {
+                                    final v = isMmol ? (e.value! / 18.0).toStringAsFixed(1) : e.value!.toInt().toString();
+                                    tooltipText += "\n🩸 $v $unit";
+                                  }
+                                  else if (e.type == EventType.note) {
+                                    String shortNote = e.note ?? "";
+                                    if (shortNote.length > 15) shortNote = "${shortNote.substring(0, 15)}...";
+                                    tooltipText += "\n📝 $shortNote";
                                   }
                                 }
-                                return LineTooltipItem(tooltipText, const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13));
                               }
-                              return null;
+                              return LineTooltipItem(tooltipText, const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13));
                             }).toList();
                           },
                         ),
@@ -246,49 +271,63 @@ class _ChartsScreenState extends State<ChartsScreen> {
                             showTitles: true, 
                             reservedSize: 40,
                             interval: isMmol ? 2.0 : 40.0,
-                            getTitlesWidget: (value, meta) => Text(isMmol ? value.toStringAsFixed(1) : value.toInt().toString(), style: const TextStyle(fontSize: 10, color: Colors.grey))
+                            getTitlesWidget: (value, meta) {
+                              if (value == meta.max || value == meta.min) return const SizedBox();
+                              return Text(isMmol ? value.toStringAsFixed(1) : value.toInt().toString(), style: const TextStyle(fontSize: 10, color: Colors.grey));
+                            }
                           )
                         ),
                         bottomTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
                             reservedSize: 36,
-                            interval: _getBottomTitleInterval(chronologicalReadings.length),
+                            interval: xInterval,
                             getTitlesWidget: (value, meta) {
-                              int idx = value.toInt();
-                              if (idx < 0 || idx >= chronologicalReadings.length) return const SizedBox.shrink();
-                              final reading = chronologicalReadings[idx];
+                              final time = DateTime.fromMillisecondsSinceEpoch(value.toInt());
+                              if (time.minute != 0) return const SizedBox.shrink();
+                              
                               String titleText = "";
                               if (_selectedTimeframe == Timeframe.oneMonth) {
-                                final dStr = "${reading.time.day.toString().padLeft(2, '0')}.${reading.time.month.toString().padLeft(2, '0')}";
-                                final hStr = "${reading.time.hour.toString().padLeft(2, '0')}:${reading.time.minute.toString().padLeft(2, '0')}";
+                                final dStr = "${time.day.toString().padLeft(2, '0')}.${time.month.toString().padLeft(2, '0')}";
+                                final hStr = "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
                                 titleText = "$dStr\n$hStr";
                               } else {
-                                titleText = "${reading.time.hour.toString().padLeft(2, '0')}:${reading.time.minute.toString().padLeft(2, '0')}";
+                                titleText = "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
                               }
+                              
                               return SideTitleWidget(meta: meta, space: 4, child: Text(titleText, textAlign: TextAlign.center, style: TextStyle(fontSize: 9, color: Colors.grey[600], fontWeight: FontWeight.w500)));
                             },
                           ),
                         ),
                       ),
                       borderData: FlBorderData(show: true, border: Border(bottom: BorderSide(color: Colors.grey.withOpacity(0.3)), left: BorderSide(color: Colors.grey.withOpacity(0.3)))),
-                      extraLinesData: ExtraLinesData(
-                        horizontalLines: [
-                          HorizontalLine(y: lowLimit, color: Colors.red.withOpacity(0.5), strokeWidth: 1.5, dashArray: [6, 4]),
-                          HorizontalLine(y: highLimit, color: Colors.orange.withOpacity(0.5), strokeWidth: 1.5, dashArray: [6, 4]),
-                        ],
-                      ),
                       lineBarsData: [
+                        LineChartBarData(
+                          spots: [FlSpot(minX, highLimit), FlSpot(maxX, highLimit)],
+                          isCurved: false,
+                          color: Colors.transparent,
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: Colors.green.withOpacity(0.07),
+                            cutOffY: lowLimit,
+                            applyCutOffY: true,
+                          ),
+                          dotData: const FlDotData(show: false),
+                        ),
                         LineChartBarData(
                           spots: spots,
                           isCurved: _selectedTimeframe != Timeframe.oneMonth,
-                          barWidth: 2.5,
+                          barWidth: 3,
                           color: Colors.blueAccent,
-                          belowBarData: BarAreaData(show: true, color: Colors.blueAccent.withOpacity(0.06)),
+                          isStrokeCapRound: true,
                           dotData: FlDotData(
                             show: true,
-                            checkToShowDot: (spot, barData) => eventsByXIndex.containsKey(spot.x.toInt()),
-                            getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(radius: 5.5, color: Colors.deepPurpleAccent, strokeWidth: 2, strokeColor: Colors.white),
+                            getDotPainter: (spot, percent, barData, index) {
+                              if (eventsByXValue.containsKey(spot.x)) {
+                                return FlDotCirclePainter(radius: 5.5, color: Colors.deepPurpleAccent, strokeWidth: 2, strokeColor: Colors.white);
+                              }
+                              return FlDotCirclePainter(radius: 2.5, color: Colors.blueAccent, strokeWidth: 0);
+                            },
                           ),
                         ),
                       ],
@@ -299,7 +338,10 @@ class _ChartsScreenState extends State<ChartsScreen> {
                     chartWidget = SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       reverse: true,
-                      child: SizedBox(width: chronologicalReadings.length * 14.0, child: Padding(padding: const EdgeInsets.only(right: 16.0), child: chartWidget)),
+                      child: SizedBox(
+                        width: 12000, 
+                        child: Padding(padding: const EdgeInsets.only(right: 16.0), child: chartWidget)
+                      ),
                     );
                   }
 

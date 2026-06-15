@@ -90,9 +90,10 @@ class _GlucoseDisplayState extends State<GlucoseDisplay> {
 
         return Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.all(32.0),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(color: color, width: 6),
@@ -101,23 +102,14 @@ class _GlucoseDisplayState extends State<GlucoseDisplay> {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Text(
-                        displayValue,
-                        style: TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.bold,
-                          color: color,
-                        ),
-                      ),
-                      if (trendIcon != null) ...[
-                        const SizedBox(width: 8),
-                        Icon(trendIcon, size: 40, color: color),
-                      ]
-                    ],
+                  Text(
+                    displayValue,
+                    style: TextStyle(
+                      fontSize: 48,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                      height: 1.1,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -127,7 +119,14 @@ class _GlucoseDisplayState extends State<GlucoseDisplay> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            
+            const SizedBox(height: 16),
+            
+            if (trendIcon != null) ...[
+              Icon(trendIcon, size: 36, color: color),
+              const SizedBox(height: 8),
+            ],
+            
             Text(
               _minutesAgo == 0 ? "Przed chwilą" : "$_minutesAgo min temu",
               style: TextStyle(

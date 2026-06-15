@@ -51,11 +51,22 @@ class NotificationService {
           importance: Importance.max,
         ),
       );
+      
       await androidImplementation.createNotificationChannel(
         const AndroidNotificationChannel(
           'cgm_hypo_alerts_v1', 'Niski Cukier (Hipoglikemia)',
           description: 'Alerty dla glikemii poniżej normy',
           importance: Importance.max,
+        ),
+      );
+
+      await androidImplementation.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'silent_cgm_channel', 'Praca w tle',
+          description: 'Utrzymuje działanie aplikacji bez dźwięków i wibracji',
+          importance: Importance.low,
+          playSound: false,
+          enableVibration: false,
         ),
       );
     }

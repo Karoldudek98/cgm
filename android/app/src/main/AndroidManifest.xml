@@ -6,7 +6,7 @@
 <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
     <application
-        android:label="cgm"
+        android:label="Monitor CGM"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
