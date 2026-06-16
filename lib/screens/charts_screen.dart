@@ -58,7 +58,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
             children: [
               Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
               const SizedBox(height: 16),
-              const Text("Szczegóły zdarzeń", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text("Szczegóły", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               Flexible(
                 child: ListView.builder(
@@ -93,7 +93,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: (e.note != null && e.note!.isNotEmpty) 
                             ? Text(e.note!) 
-                            : const Text("Brak dodatkowych informacji.", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
+                            : const Text("Brak notatki", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
                       ),
                     );
                   },
@@ -117,7 +117,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
         final String unit = isMmol ? "mmol/L" : "mg/dL";
 
         return Scaffold(
-          appBar: AppBar(title: const Text("Analiza Glikemii"), centerTitle: true),
+          appBar: AppBar(title: const Text("Wykres glikemii"), centerTitle: true),
           body: StreamBuilder<List<GlucoseReading>>(
             stream: _dataService.glucoseStream,
             initialData: _dataService.lastReadings,
@@ -378,7 +378,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
             case Timeframe.sixHours: label = "6h"; break;
             case Timeframe.twelveHours: label = "12h"; break;
             case Timeframe.twentyFourHours: label = "24h"; break;
-            case Timeframe.oneMonth: label = "1M (Przewijany)"; break;
+            case Timeframe.oneMonth: label = "1M"; break;
           }
           return Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4.0),

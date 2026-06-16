@@ -95,7 +95,7 @@ class _GlucoseThresholdsWidgetState extends State<GlucoseThresholdsWidget> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Konfiguracja progów ($unitLabel)",
+                  "Konfiguracja zakresów ($unitLabel)",
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blueAccent),
                 ),
                 const SizedBox(height: 16),

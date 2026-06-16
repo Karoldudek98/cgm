@@ -34,7 +34,7 @@ class _MainNavigationState extends State<MainNavigation> {
         onTap: (index) => setState(() => _selectedIndex = index),
         selectedItemColor: Colors.blueAccent,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Start'),
           BottomNavigationBarItem(icon: Icon(Icons.show_chart), label: 'Wykresy'),
           BottomNavigationBarItem(icon: Icon(Icons.notifications_active), label: 'Wydarzenia'),
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Ustawienia'),

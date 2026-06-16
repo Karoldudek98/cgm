@@ -85,7 +85,7 @@ class GlucoseSummaryWidget extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  "Podsumowanie z pobranych danych",
+                  "Podsumowanie glikemii",
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
@@ -177,7 +177,7 @@ class GlucoseSummaryWidget extends StatelessWidget {
   }
 
   Widget _buildLegendRow(Color color, String label, int percentage, {bool isBold = false}) {
-    if (percentage == 0 && !isBold) return const SizedBox(); // Ukrywamy 0% dla czystości, z wyjątkiem "W zakresie"
+    if (percentage == 0 && !isBold) return const SizedBox();
     
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),

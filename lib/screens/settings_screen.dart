@@ -53,7 +53,7 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.notifications_active),
             title: const Text("Zarządzaj dźwiękami alarmów"),
-            subtitle: const Text("Wybierz osobny dźwięk dla wysokiego i niskiego cukru w ustawieniach systemu."),
+            subtitle: const Text("Zmień dźwięk powiadomień dla wysokiego i niskiego cukru w ustawieniach systemu"),
             trailing: const Icon(Icons.open_in_new),
             onTap: () {
               AppSettings.openAppSettings(type: AppSettingsType.notification);

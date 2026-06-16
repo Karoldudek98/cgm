@@ -28,7 +28,22 @@ class GlucoseReading {
     
     int trendInt = 0;
     if (json['Trend'] != null) {
-      trendInt = int.tryParse(json['Trend'].toString()) ?? 0;
+      final trendRaw = json['Trend'].toString();
+      
+      trendInt = int.tryParse(trendRaw) ?? 0;
+      
+      if (trendInt == 0) {
+        switch (trendRaw.toLowerCase()) {
+          case 'doubleup': trendInt = 1; break;
+          case 'singleup': trendInt = 2; break;
+          case 'fortyfiveup': trendInt = 3; break;
+          case 'flat': trendInt = 4; break;
+          case 'fortyfivedown': trendInt = 5; break;
+          case 'singledown': trendInt = 6; break;
+          case 'doubledown': trendInt = 7; break;
+          default: trendInt = 0;
+        }
+      }
     }
 
     return GlucoseReading(

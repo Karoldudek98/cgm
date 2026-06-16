@@ -14,7 +14,7 @@ Future<void> initializeBackgroundService() async {
 
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     'cgm_foreground',
-    'Monitor CGM (W Tle)',
+    'Monitor CGM',
     description: 'Utrzymuje proces monitorowania glikemii przy wyłączonym ekranie.',
     importance: Importance.low,
   );
@@ -73,10 +73,16 @@ void onStart(ServiceInstance service) async {
       if (readings.isNotEmpty) {
         final latest = readings.first;
         
+        final bool isMmol = SettingsService().isMmolLNotifier.value;
+        final String displayValue = isMmol 
+            ? (latest.value / 18.0).toStringAsFixed(1) 
+            : latest.value.toString();
+        final String unit = isMmol ? "mmol/L" : "mg/dL";
+        
         if (service is AndroidServiceInstance) {
           service.setForegroundNotificationInfo(
-            title: "CGM Aktywny (W tle)",
-            content: "Ostatni odczyt: ${latest.value} mg/dL",
+            title: "CGM Aktywny",
+            content: "Ostatni odczyt: $displayValue $unit",
           );
         }
 

@@ -106,7 +106,7 @@ class _EventsScreenState extends State<EventsScreen> {
         final endStr = "${e.endTime!.hour.toString().padLeft(2,'0')}:${e.endTime!.minute.toString().padLeft(2,'0')}";
         return "Od: $startStr  Do: $endStr";
       } else {
-        return "Rozpoczęto: $startStr (W trwaniu...)";
+        return "Od: $startStr";
       }
     }
     return startStr;
@@ -119,7 +119,7 @@ class _EventsScreenState extends State<EventsScreen> {
       builder: (context, isMmol, child) {
         return Scaffold(
           appBar: AppBar(
-            title: const Text("Dzienniczek Zdarzeń"),
+            title: const Text("Wydarzenia i notatki"),
             centerTitle: true,
             actions: [
               IconButton(icon: const Icon(Icons.add, size: 28), onPressed: () => _showEventForm()),

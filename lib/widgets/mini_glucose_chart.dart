@@ -35,7 +35,7 @@ class _MiniGlucoseChartState extends State<MiniGlucoseChart> {
             children: [
               Container(width: 40, height: 5, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
               const SizedBox(height: 16),
-              const Text("Szczegóły zdarzeń", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text("Szczegóły", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               Flexible(
                 child: ListView.builder(
@@ -70,7 +70,7 @@ class _MiniGlucoseChartState extends State<MiniGlucoseChart> {
                         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
                         subtitle: (e.note != null && e.note!.isNotEmpty) 
                             ? Text(e.note!) 
-                            : const Text("Brak dodatkowych informacji.", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
+                            : const Text("Brak notatki", style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
                       ),
                     );
                   },
@@ -97,14 +97,21 @@ class _MiniGlucoseChartState extends State<MiniGlucoseChart> {
     final now = DateTime.now();
     final referenceTime = widget.readings.isNotEmpty ? widget.readings.first.time : now; 
     
-    final roundedMax = DateTime(referenceTime.year, referenceTime.month, referenceTime.day, referenceTime.hour + 1);
-    final maxX = roundedMax.millisecondsSinceEpoch.toDouble();
-    
-    final minX = roundedMax.subtract(const Duration(hours: 4)).millisecondsSinceEpoch.toDouble();
-    final minTime = DateTime.fromMillisecondsSinceEpoch(minX.toInt());
+    final maxTime = referenceTime.add(const Duration(hours: 1));
+    final minTime = referenceTime.subtract(const Duration(hours: 3));
 
-    final recentReadings = widget.readings.where((r) => r.time.isAfter(minTime) || r.time.isAtSameMomentAs(minTime)).toList();
-    recentReadings.sort((a, b) => a.time.compareTo(b.time));
+    final maxX = maxTime.millisecondsSinceEpoch.toDouble();
+    final minX = minTime.millisecondsSinceEpoch.toDouble();
+
+    final rawRecentReadings = widget.readings.where((r) => r.time.isAfter(minTime) || r.time.isAtSameMomentAs(minTime)).toList();
+    rawRecentReadings.sort((a, b) => a.time.compareTo(b.time));
+
+    final recentReadings = <GlucoseReading>[];
+    for (var r in rawRecentReadings) {
+      if (recentReadings.isEmpty || recentReadings.last.time != r.time) {
+        recentReadings.add(r);
+      }
+    }
 
     if (recentReadings.isEmpty) {
       return const SizedBox(
@@ -195,6 +202,8 @@ class _MiniGlucoseChartState extends State<MiniGlucoseChart> {
                           handleBuiltInTouches: true,
                           getTouchedSpotIndicator: (LineChartBarData barData, List<int> spotIndexes) {
                             return spotIndexes.map((spotIndex) {
+                              if (barData.color != Colors.blueAccent) return null;
+
                               return TouchedSpotIndicatorData(
                                 const FlLine(color: Colors.blueAccent, strokeWidth: 3),
                                 FlDotData(
@@ -225,7 +234,12 @@ class _MiniGlucoseChartState extends State<MiniGlucoseChart> {
                             getTooltipColor: (LineBarSpot touchedSpot) => Colors.blueGrey.withOpacity(0.95),
                             getTooltipItems: (List<LineBarSpot> touchedSpots) {
                               return touchedSpots.map((LineBarSpot touchedSpot) {
+                                // 1. Ignorujemy tooltip tła
                                 if (touchedSpot.barIndex == 0) return null;
+
+                                if (touchedSpot.barIndex == 2 && touchedSpots.any((s) => s.barIndex == 1)) {
+                                  return null;
+                                }
 
                                 final time = DateTime.fromMillisecondsSinceEpoch(touchedSpot.x.toInt());
                                 final timeStr = "${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}";
@@ -236,7 +250,7 @@ class _MiniGlucoseChartState extends State<MiniGlucoseChart> {
 
                                 String tooltipText = "$displayVal $unit\n$timeStr";
 
-                                if (eventsByXValue.containsKey(touchedSpot.x)) {
+                                if (touchedSpot.barIndex == 1 && eventsByXValue.containsKey(touchedSpot.x)) {
                                   final eventsAtSpot = eventsByXValue[touchedSpot.x]!;
                                   tooltipText += "\n---";
                                   for (var e in eventsAtSpot) {
@@ -305,9 +319,9 @@ class _MiniGlucoseChartState extends State<MiniGlucoseChart> {
                               interval: 3600000,
                               reservedSize: 28,
                               getTitlesWidget: (value, meta) {
-                                if (value == meta.max || value == meta.min) return const SizedBox();
-
                                 final time = DateTime.fromMillisecondsSinceEpoch(value.toInt());
+                                if (time.minute != 0) return const SizedBox.shrink();
+
                                 final hourStr = time.hour.toString().padLeft(2, '0');
                                 final minuteStr = time.minute.toString().padLeft(2, '0');
 
